@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  font-family: 'Cairo', sans-serif;
+}
+
+body {
+  direction: rtl;
+  text-align: right;
+}
+
+.btn-primary {
+  @apply bg-primary-800 hover:bg-primary-900 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+}
+
+.btn-secondary {
+  @apply bg-secondary-200 hover:bg-secondary-300 text-secondary-800 font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+}
+
+.btn-danger {
+  @apply bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+}
+
+.input-field {
+  @apply w-full px-3 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+}
+
+.btn-export {
+  @apply flex items-center justify-center text-white font-medium py-2 px-3 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-md;
+}
+
+.btn-export-pdf {
+  @apply bg-red-600 hover:bg-red-700;
+}
+
+.btn-export-word {
+  @apply bg-blue-600 hover:bg-blue-700;
+}
+
+.btn-export-csv {
+  @apply bg-green-600 hover:bg-green-700;
+}
+
+.card {
+  @apply bg-white rounded-lg shadow-lg p-6 border border-secondary-200;
+}
+
+.table-container {
+  @apply rounded-lg shadow-md overflow-hidden border border-gray-200;
+}
+
+.table-unified {
+  @apply w-full text-sm text-gray-700;
+}
+
+.table-unified thead {
+  @apply bg-gray-100 text-gray-600 uppercase text-xs tracking-wider;
+}
+
+.table-unified th {
+  @apply py-3 px-4 font-semibold text-right;
+}
+
+.table-unified tbody tr {
+  @apply bg-white border-b border-gray-200 hover:bg-gray-50;
+}
+
+.table-unified tbody tr:last-child {
+  @apply border-b-0;
+}
+
+.table-unified td {
+  @apply py-4 px-4 text-right;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  .print-only {
+    display: block !important;
+  }
+  
+  body {
+    background: white !important;
+    color: black !important;
+  }
+}

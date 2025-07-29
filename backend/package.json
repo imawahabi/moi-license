@@ -1,0 +1,27 @@
+{
+  "name": "kuwait-police-backend",
+  "version": "1.0.0",
+  "description": "Backend for Kuwait Police License Management System",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server-json.js",
+    "start:mysql": "node server.js",
+    "start:sqlite": "node server-sqlite.js",
+    "dev": "node server-json.js",
+    "dev:mysql": "node server.js",
+    "dev:sqlite": "node server-sqlite.js",
+    "test-db": "node test-db.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mysql2": "^3.6.5",
+    "sqlite3": "^5.1.6",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
