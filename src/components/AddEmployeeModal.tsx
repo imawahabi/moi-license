@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Employee } from '../types';
+import { UserPlus, X } from 'lucide-react';
 
 interface AddEmployeeModalProps {
   onAdd: (employee: Omit<Employee, 'id'>) => void;
@@ -24,10 +25,22 @@ const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({ onAdd, onClose }) =
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" dir="rtl">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl transform transition-all">
-        <h3 className="text-xl font-semibold mb-6 text-secondary-900">إضافة موظف جديد</h3>
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="modal-overlay animate-fade-in" dir="rtl">
+      <div className="modal-container animate-fade-in-down">
+        <div className="modal-header">
+          <h3 className="modal-title">
+            <UserPlus className="w-6 h-6 text-primary-600" />
+            إضافة موظف جديد
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-secondary-100 rounded-lg transition-colors"
+          >
+            <X className="w-5 h-5 text-secondary-600" />
+          </button>
+        </div>
+        <div className="modal-body">
+          <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-secondary-700 mb-1">الاسم الكامل *</label>
             <input
@@ -70,15 +83,16 @@ const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({ onAdd, onClose }) =
               <option value="مدني">مدني</option>
             </select>
           </div>
-          <div className="flex justify-end space-x-2 space-x-reverse pt-6">
-            <button type="button" onClick={onClose} className="btn-secondary">
-              إلغاء
-            </button>
-            <button type="submit" className="btn-primary">
-              إضافة الموظف
-            </button>
-          </div>
-        </form>
+            <div className="modal-footer">
+              <button type="button" onClick={onClose} className="btn-secondary">
+                إلغاء
+              </button>
+              <button type="submit" className="btn-primary">
+                إضافة الموظف
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );

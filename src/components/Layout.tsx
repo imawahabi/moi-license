@@ -1,6 +1,5 @@
-import React from 'react';
-import { Shield, Users, FileText, BarChart3, PlusCircle, Upload } from 'lucide-react';
-import KuwaitLogo from './KuwaitLogo';
+import React, { useState, useEffect } from 'react';
+import Sidebar from './Sidebar';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -8,109 +7,120 @@ interface LayoutProps {
   onTabChange: (tab: string) => void;
 }
 
+const getPageTitle = (activeTab: string): string => {
+  const titles: Record<string, string> = {
+    'dashboard': 'لوحة التحكم',
+    'add-license': 'تسجيل رخصة جديدة',
+    'licenses': 'قائمة الرخص',
+    'employees': 'إدارة الموظفين',
+    'reports': 'التقارير الحديثة',
+    'old-reports': 'التقارير التقليدية',
+  };
+  return titles[activeTab] || 'نظام إدارة الرخص';
+};
+
+const getPageSubtitle = (activeTab: string): string => {
+  const subtitles: Record<string, string> = {
+    'dashboard': 'نظرة شاملة على إحصائيات النظام',
+    'add-license': 'إضافة رخصة جديدة لموظف أو عدة موظفين',
+    'licenses': 'عرض وإدارة جميع الرخص المسجلة',
+    'employees': 'إدارة بيانات الموظفين',
+    'reports': 'تقارير وإحصائيات مفصلة',
+    'alerts': 'التنبيهات والإشعارات',
+    'settings': 'إعدادات النظام'
+  };
+  return subtitles[activeTab] || 'نظام إدارة رخص السجل العام';
+};
+
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => {
-  const tabs = [
-    { id: 'dashboard', label: 'لوحة التحكم', icon: BarChart3 },
-    { id: 'licenses', label: 'قائمة الرخص', icon: FileText },
-    { id: 'reports', label: 'التقارير والإحصائيات', icon: Shield },
-    { id: 'employees', label: 'الموظفين', icon: Users },
-  ];
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const handleToggleSidebar = () => {
+    setIsCollapsed(!isCollapsed);
+  };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* Header */}
-      <header className="bg-kuwait-gradient shadow-lg border-b-4 border-blue-400">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-24">
-            <div className="flex items-center space-x-5 rtl:space-x-reverse">
-              <KuwaitLogo size="lg" />
-              <div>
-                <h1 className="text-2xl font-bold text-white tracking-wider">
-                  نظام إدارة رخص السجل العام
-                </h1>
-                <p className="text-base text-blue-200">
-                  الإدارة العامة لمكتب وكيل الوزارة
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center">
-              <span className="text-white font-semibold">وزارة الداخلية - دولة الكويت</span>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex">
+      {/* Sidebar */}
+      <Sidebar
+        isCollapsed={isCollapsed}
+        onToggle={handleToggleSidebar}
+        currentPage={activeTab}
+        onPageChange={onTabChange}
+      />
 
-      {/* Navigation */}
-      <nav className="bg-white shadow-sm border-b border-secondary-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-8 space-x-reverse items-center">
-            {/* التابات العادية */}
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => onTabChange(tab.id)}
-                  className={`flex items-center space-x-2 space-x-reverse px-4 py-4 border-b-2 font-medium text-sm transition-colors ${
-                    isActive
-                      ? 'border-primary-500 text-primary-600'
-                      : 'border-transparent text-secondary-500 hover:text-secondary-700 hover:border-secondary-300'
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-            {/* أزرار الإجراءات */}
-            <div className="flex items-center space-x-3 space-x-reverse" style={{ marginRight: 'auto' }}>
-              {/* زر استيراد البيانات 
-              <button
-                onClick={() => onTabChange('data-importer')}
-                className={`flex items-center space-x-2 space-x-reverse px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200 shadow-md hover:shadow-lg ${activeTab === 'data-importer' ? 'bg-purple-700' : ''}`}
-                title="استيراد بيانات من SQL"
-              >
-                <Upload className="w-4 h-4" />
-                <span>استيراد البيانات</span>
-              </button>*/}
-
-              {/* زر إضافة رخصة جديدة */}
-              <button
-                onClick={() => onTabChange('add-license')}
-                className={`btn-primary flex items-center space-x-2 space-x-reverse ${activeTab === 'add-license' ? 'bg-primary-700 text-white' : ''}`}
-                title="إضافة رخصة جديدة"
-              >
-                <PlusCircle className="w-4 h-4" />
-                <span>تسجيل رخصة جديدة</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      {/* Main Content */}
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
-        {children}
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-white border-t border-secondary-200 mt-16 w-full">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      {/* Main Content Area */}
+      <div
+        className={`flex-1 flex flex-col transition-all duration-300 ${
+          isCollapsed ? 'mr-20' : 'mr-64'
+        }`}
+      >
+        {/* Top Header with Live Clock */}
+        <header className="bg-white shadow-md border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4 space-x-reverse">
-              <KuwaitLogo size="sm" />
-              <div className="text-sm text-secondary-600">
-                <p>الإدارة العامة لمكتب وكيل الوزارة</p>
-                <p>نظام إدارة رخص السجل العام</p>
+            <div className="mr-6">
+              <h1 className="text-2xl font-bold text-gray-800">
+                {getPageTitle(activeTab)}
+              </h1>
+              <p className="text-sm text-gray-600 mt-1">
+                {getPageSubtitle(activeTab)}
+              </p>
+            </div>
+            <div className="relative">
+                <div className="flex items-center justify-center space-x-4 space-x-reverse">
+                  {/* التاريخ والوقت في سطر واحد */}
+                  <div className="text-center">
+                    <div className="text-md font-bold leading-tight flex items-center justify-center space-x-4 space-x-reverse">
+                      <span className="text-gray-800">
+                        {currentTime.toLocaleDateString('ar-US', {
+                          weekday: 'long',
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </span>
+                      <span className="text-gray-300">|</span>
+                      <span className="text-gray-600">
+                        {currentTime.toLocaleTimeString('ar-US', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                          hour12: true
+                        })}
+                      </span>
+                    </div>
+                </div>
               </div>
             </div>
-            <div className="text-sm text-secondary-500">
-              <p>النسخة 1.0.0</p>
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <main className="flex-1 p-6 overflow-y-auto animate-fade-in">
+            {children}
+        </main>
+
+        {/* Footer */}
+        <footer className="bg-white border-t border-gray-200 px-6 py-4">
+          <div className="flex items-center justify-between text-sm text-gray-600">
+            <div>
+              <p>الإدارة العامة لمكتب وكيل الوزارة - وزارة الداخلية - دولة الكويت</p>
+            </div>
+            <div>
+              <p>© جميع الحقوق محفوظة - الإصدار 1.0</p>
             </div>
           </div>
-        </div>
-      </footer>
+        </footer>
+      </div>
     </div>
   );
 };

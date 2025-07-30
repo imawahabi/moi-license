@@ -35,8 +35,10 @@ export interface FilterOptions {
   employee_name?: string;
   rank?: string;
   category?: string;
+  categories?: string[];
   license_type?: string;
   month?: number;
+  months?: number[];
   year?: number;
   date_from?: string;
   date_to?: string;

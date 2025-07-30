@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, FileText, Clock, Users, TrendingUp, Calendar } from 'lucide-react';
+import { BarChart3, FileText, Clock, Users, TrendingUp, Calendar, Award, History, UserCheck, Eye } from 'lucide-react';
 import { LicenseService } from '../services/licenseService';
 import { EmployeeService } from '../services/employeeService';
 import { LicenseStats, Employee, License } from '../types';
@@ -12,12 +12,51 @@ const Dashboard: React.FC = () => {
     const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [currentMonthStats, setCurrentMonthStats] = useState({ total: 0, fullDay: 0, hourly: 0 });
+  const [lastMonthStats, setLastMonthStats] = useState({ total: 0, fullDay: 0, hourly: 0 });
+  const [latestLicense, setLatestLicense] = useState<License | null>(null);
+  const [employeeCategories, setEmployeeCategories] = useState({ officers: 0, ncos: 0, professionals: 0, civilians: 0 });
   const [employeeLicenses, setEmployeeLicenses] = useState<License[]>([]);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   useEffect(() => {
     loadData();
   }, []);
+
+  const calculateEnhancedStats = (licenses: License[], employees: Employee[]) => {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+    const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+    const lastMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+
+    // Current month stats
+    const currentMonthLicenses = licenses.filter(l => l.month === currentMonth && l.year === currentYear);
+    const currentMonthFullDay = currentMonthLicenses.filter(l => l.license_type === 'يوم كامل').length;
+    const currentMonthHourly = currentMonthLicenses.filter(l => l.license_type === 'نصف يوم').length;
+
+    // Last month stats
+    const lastMonthLicenses = licenses.filter(l => l.month === lastMonth && l.year === lastMonthYear);
+    const lastMonthFullDay = lastMonthLicenses.filter(l => l.license_type === 'يوم كامل').length;
+    const lastMonthHourlyCount = lastMonthLicenses.filter(l => l.license_type === 'نصف يوم').length;
+
+    // Latest license
+    const sortedLicenses = licenses.sort((a, b) => new Date(b.license_date).getTime() - new Date(a.license_date).getTime());
+    const latest = sortedLicenses[0] || null;
+
+    // Employee categories
+    const categories = {
+      officers: employees.filter(e => e.category === 'ضابط').length,
+      ncos: employees.filter(e => e.category === 'ضابط صف').length,
+      professionals: employees.filter(e => e.category === 'مهني').length,
+      civilians: employees.filter(e => e.category === 'مدني').length
+    };
+
+    setCurrentMonthStats({ total: currentMonthLicenses.length, fullDay: currentMonthFullDay, hourly: currentMonthHourly });
+    setLastMonthStats({ total: lastMonthLicenses.length, fullDay: lastMonthFullDay, hourly: lastMonthHourlyCount });
+    setLatestLicense(latest);
+    setEmployeeCategories(categories);
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -31,7 +70,15 @@ const Dashboard: React.FC = () => {
 
       setStats(statsData);
       setEmployees(employeesData);
-      setRecentLicenses(licensesData.slice(0, 10));
+
+      // Calculate enhanced stats
+      calculateEnhancedStats(licensesData, employeesData);
+
+      // Get recent licenses (last 10)
+      const sortedLicenses = licensesData
+        .sort((a: License, b: License) => new Date(b.license_date).getTime() - new Date(a.license_date).getTime())
+        .slice(0, 10);
+      setRecentLicenses(sortedLicenses);
     } catch (err) {
       console.error('Error loading dashboard data:', err);
       setError('حدث خطأ أثناء تحميل بيانات لوحة التحكم. يرجى المحاولة مرة أخرى.');
@@ -43,7 +90,7 @@ const Dashboard: React.FC = () => {
     const handleViewDetails = async (employee: Employee | undefined) => {
     if (!employee) return;
     try {
-      const licenses = await LicenseService.getByEmployee(employee.id);
+      const licenses = await LicenseService.getByEmployee(String(employee.id));
       setSelectedEmployee(employee);
       setEmployeeLicenses(licenses);
       setShowDetailsModal(true);
@@ -96,178 +143,222 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-secondary-900">لوحة التحكم</h1>
-        <div className="flex items-center space-x-2 space-x-reverse text-secondary-600">
-          <Calendar className="w-5 h-5" />
-          <span>{formatDate(new Date().toISOString())}</span>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="card bg-white border border-secondary-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-secondary-600 font-medium">إجمالي الرخص</p>
-              <p className="text-3xl font-bold text-secondary-900">{(stats?.total_licenses || 0).toLocaleString('en')}</p>
+    <div className="space-y-8 animate-fade-in">
+      {/* Enhanced Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        {/* Current Month Stats */}
+        <div className="group relative bg-gradient-to-br from-blue-50 to-blue-100 rounded-3xl p-6 shadow-lg hover:shadow-2xl transition-all duration-500 border border-blue-200 hover:border-blue-300 hover:-translate-y-2">
+          <div className="absolute top-4 right-4">
+            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+              <Calendar className="w-8 h-8 text-white" />
             </div>
-            <div className="p-3 bg-primary-600 rounded-full">
-              <FileText className="w-6 h-6 text-white" />
+          </div>
+          <div className="pt-4">
+            <div className="text-4xl font-bold text-blue-900 mb-2">{currentMonthStats.total.toLocaleString('en')}</div>
+            <div className="text-lg font-semibold text-blue-700 mb-4">رخص الشهر الحالي</div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between bg-white/60 rounded-lg px-3 py-2">
+                <span className="text-sm font-medium text-blue-600">يوم كامل</span>
+                <span className="text-sm font-bold text-green-600">{currentMonthStats.fullDay}</span>
+              </div>
+              <div className="flex items-center justify-between bg-white/60 rounded-lg px-3 py-2">
+                <span className="text-sm font-medium text-blue-600">رخص الساعات المحددة</span>
+                <span className="text-sm font-bold text-orange-600">{currentMonthStats.hourly}</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="card bg-white border border-secondary-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-secondary-600 font-medium">رخص اليوم الكامل</p>
-              <p className="text-3xl font-bold text-secondary-900">{(stats?.full_day_licenses || 0).toLocaleString('en')}</p>
+        {/* Last Month Stats */}
+        <div className="group relative bg-gradient-to-br from-gray-50 to-gray-100 rounded-3xl p-6 shadow-lg hover:shadow-2xl transition-all duration-500 border border-gray-200 hover:border-gray-300 hover:-translate-y-2">
+          <div className="absolute top-4 right-4">
+            <div className="w-16 h-16 bg-gradient-to-br from-gray-500 to-gray-600 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+              <History className="w-8 h-8 text-white" />
             </div>
-            <div className="p-3 bg-blue-600 rounded-full">
-              <Calendar className="w-6 h-6 text-white" />
+          </div>
+          <div className="pt-4">
+            <div className="text-4xl font-bold text-gray-900 mb-2">{lastMonthStats.total.toLocaleString('en')}</div>
+            <div className="text-lg font-semibold text-gray-700 mb-4">رخص الشهر الماضي</div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between bg-white/60 rounded-lg px-3 py-2">
+                <span className="text-sm font-medium text-gray-600">يوم كامل</span>
+                <span className="text-sm font-bold text-green-600">{lastMonthStats.fullDay}</span>
+              </div>
+              <div className="flex items-center justify-between bg-white/60 rounded-lg px-3 py-2">
+                <span className="text-sm font-medium text-gray-600">رخص الساعات المحددة</span>
+                <span className="text-sm font-bold text-orange-600">{lastMonthStats.hourly}</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="card bg-white border border-secondary-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-secondary-600 font-medium">رخص الساعات</p>
-              <p className="text-3xl font-bold text-secondary-900">{(stats?.hours_licenses || 0).toLocaleString('en')}</p>
-            </div>
-            <div className="p-3 bg-gray-600 rounded-full">
-              <Clock className="w-6 h-6 text-white" />
+        {/* Latest License */}
+        <div className="group relative bg-gradient-to-br from-green-50 to-green-100 rounded-3xl p-6 shadow-lg hover:shadow-2xl transition-all duration-500 border border-green-200 hover:border-green-300 hover:-translate-y-2">
+          <div className="absolute top-4 right-4">
+            <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+              <Award className="w-8 h-8 text-white" />
             </div>
           </div>
-        </div>
-
-        <div className="card bg-white border border-secondary-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-secondary-600 font-medium">إجمالي الساعات</p>
-              <p className="text-3xl font-bold text-secondary-900">{(stats?.total_hours || 0).toLocaleString('en')}</p>
-            </div>
-            <div className="p-3 bg-secondary-700 rounded-full">
-              <TrendingUp className="w-6 h-6 text-white" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-secondary-900">معلومات إضافية</h3>
-            <BarChart3 className="w-5 h-5 text-primary-500" />
-          </div>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center py-2 border-b border-secondary-100">
-              <span className="text-secondary-600">إجمالي موظفي الإدارة</span>
-              <span className="font-semibold text-secondary-900">{employees.length.toLocaleString('en')}</span>
-            </div>
-            <div className="flex justify-between items-center py-2 border-b border-secondary-100">
-              <span className="text-secondary-600">عدد رخص الشهر الحالي</span>
-              <span className="font-semibold text-secondary-900">{licensesThisMonth.length.toLocaleString('en')}</span>
-            </div>
-            <div className="flex justify-between items-center py-2">
-              <span className="text-secondary-600">أكثر موظف حصل على رخص هذا الشهر</span>
-              <span className="font-semibold text-secondary-900 flex items-center gap-2">
-                {mostLicensesEmployeeMonth ? (
-                  <>
-                    {mostLicensesEmployeeMonth[0]}
-                    <span className="inline-block px-2 py-0.5 rounded-full text-xs font-bold bg-blue-900 text-white ml-1">
-                      {mostLicensesEmployeeMonth[1]}
-                    </span>
-                  </>
-                ) : 'لا يوجد'}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-secondary-900">توزيع الموظفين</h3>
-            <Users className="w-5 h-5 text-primary-500" />
-          </div>
-          <div className="space-y-3">
-            {['ضابط', 'ضابط صف', 'مهني', 'مدني'].map((category) => {
-              const count = employees.filter(emp => emp.category === category).length;
-              const percentage = employees.length > 0 ? (count / employees.length) * 100 : 0;
-              
-              return (
-                <div key={category} className="space-y-1">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-secondary-600">{category}</span>
-                    <span className="text-sm font-semibold text-secondary-900">{count.toLocaleString('en')}</span>
-                  </div>
-                  <div className="w-full bg-secondary-200 rounded-full h-2">
-                    <div 
-                      className="bg-primary-500 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${percentage}%` }}
-                    ></div>
-                  </div>
+          <div className="pt-20">
+            <div className="text-sm font-semibold text-green-700 mb-2">آخر رخصة مسجلة</div>
+            {latestLicense ? (
+              <>
+                <div className="text-base font-bold text-green-900 mb-2 leading-tight">
+                  {latestLicense.employee?.rank}
                 </div>
-              );
-            })}
+                <div className="text-base font-semibold text-green-800 mb-3">
+                  {latestLicense.employee?.full_name}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                    latestLicense.license_type === 'يوم كامل'
+                      ? 'bg-green-200 text-green-800'
+                      : 'bg-orange-200 text-orange-800'
+                  }`}>
+                    {latestLicense.license_type}
+                  </span>
+                  {latestLicense.hours && (
+                    <span className="text-xs font-medium text-green-600">
+                      {latestLicense.hours} ساعات
+                    </span>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="text-green-600">لا توجد رخص</div>
+            )}
           </div>
         </div>
+
+        {/* Total Employees */}
+        <div className="group relative bg-gradient-to-br from-orange-50 to-orange-100 rounded-3xl p-6 shadow-lg hover:shadow-2xl transition-all duration-500 border border-orange-200 hover:border-orange-300 hover:-translate-y-2">
+          <div className="absolute top-4 right-4">
+            <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+              <UserCheck className="w-8 h-8 text-white" />
+            </div>
+          </div>
+          <div className="pt-4">
+            <div className="text-4xl font-bold text-blue-900 mb-2">{employees.length.toLocaleString('en')}</div>
+            <div className="text-lg font-semibold text-orange-700 mb-4">إجمالي الموظفين</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-white/60 rounded-lg px-2 py-1 text-center">
+                <div className="text-xs font-medium text-orange-600">الضباط</div>
+                <div className="text-sm font-bold text-orange-600">{employeeCategories.officers}</div>
+              </div>
+              <div className="bg-white/60 rounded-lg px-2 py-1 text-center">
+                <div className="text-xs font-medium text-orange-600">ضباط الصف</div>
+                <div className="text-sm font-bold text-orange-600">{employeeCategories.ncos}</div>
+              </div>
+              <div className="bg-white/60 rounded-lg px-2 py-1 text-center">
+                <div className="text-xs font-medium text-orange-600">المهنيين</div>
+                <div className="text-sm font-bold text-orange-600">{employeeCategories.professionals}</div>
+              </div>
+              <div className="bg-white/60 rounded-lg px-2 py-1 text-center">
+                <div className="text-xs font-medium text-orange-600">المدنيين</div>
+                <div className="text-sm font-bold text-orange-600">{employeeCategories.civilians}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
+
+
 
       {/* Recent Licenses */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-secondary-900">آخر الرخص المسجلة</h3>
-          <FileText className="w-5 h-5 text-primary-500" />
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden hover:shadow-2xl transition-all duration-500">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
+                <FileText className="w-7 h-7 text-white" />
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-white">آخر الرخص المسجلة</h3>
+                <p className="text-blue-100 text-sm mt-1">عرض أحدث 10 رخص تم تسجيلها في النظام</p>
+              </div>
+            </div>
+            <div className="bg-white/20 px-4 py-2 rounded-xl">
+              <span className="text-white font-bold text-lg">{recentLicenses.length}</span>
+              <span className="text-blue-100 text-sm mr-1">رخصة</span>
+            </div>
+          </div>
         </div>
-        
+
         {recentLicenses.length > 0 ? (
-          <div className="table-container">
-            <table className="table-unified">
-              <thead>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
                 <tr>
-                  <th>م</th>
-                  <th>الرتبة</th>
-                  <th>اسم الموظف</th>
-                  <th>نوع الرخصة</th>
-                  <th>تاريخ الرخصة</th>
-                  <th>الساعات</th>
+                  <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">م</th>
+                  <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">الرتبة</th>
+                  <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">اسم الموظف</th>
+                  <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">نوع الرخصة</th>
+                  <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">تاريخ الرخصة</th>
+                  <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">الساعات</th>
+                  <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 border-b-2 border-gray-200">الإجراءات</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-100">
                 {recentLicenses.map((license, index) => (
-                  <tr key={license.id}>
-                    <td>{index + 1}</td>
-                    <td>{license.employee?.rank}</td>
-                                        <td className="font-medium">
-                      <button onClick={() => handleViewDetails(license.employee)} className="text-primary-600 hover:text-primary-800 hover:underline focus:outline-none font-medium">
-                        {license.employee?.full_name}
-                      </button>
+                  <tr key={license.id} className="hover:bg-blue-50 transition-colors duration-200 group">
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center font-bold text-blue-600 group-hover:bg-blue-200">
+                        {index + 1}
+                      </div>
                     </td>
-                    <td>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    <td className="px-6 py-4 text-sm font-medium text-gray-700">
+                      <span className="bg-gray-100 px-3 py-1 rounded-full text-xs font-bold group-hover:bg-gray-200">
+                        {license.employee?.category === 'ضابط' || license.employee?.category === 'ضابط صف'
+                          ? license.employee?.rank
+                          : license.employee?.category}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm font-bold text-gray-900">
+                      {license.employee?.full_name}
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      <span className={`px-4 py-2 rounded-full text-xs font-bold shadow-sm ${
                         license.license_type === 'يوم كامل'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-orange-100 text-orange-800'
+                          ? 'bg-green-100 text-green-800 border border-green-200'
+                          : 'bg-orange-100 text-orange-800 border border-orange-200'
                       }`}>
                         {license.license_type}
                       </span>
                     </td>
-                    <td>{formatDate(license.license_date)}</td>
-                    <td>{license.hours ? license.hours.toLocaleString('en') : '-'}</td>
+                    <td className="px-6 py-4 text-sm text-gray-700 font-bold">
+                      {formatDate(license.license_date)}
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      {license.hours ? (
+                        <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-bold">
+                          {license.hours.toLocaleString('en')} ساعات
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 font-medium">-</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <button
+                        onClick={() => handleViewDetails(license.employee)}
+                        className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all duration-200 group/btn"
+                        title="عرض تفاصيل الموظف"
+                      >
+                        <Eye className="w-4 h-4 group-hover/btn:scale-110 transition-transform duration-200" />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         ) : (
-          <div className="text-center py-8">
-            <FileText className="w-12 h-12 text-secondary-400 mx-auto mb-4" />
-            <p className="text-secondary-600">لا توجد رخص مسجلة حالياً</p>
+          <div className="text-center py-16">
+            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <FileText className="w-10 h-10 text-gray-400" />
+            </div>
+            <h4 className="text-lg font-semibold text-gray-700 mb-2">لا توجد رخص مسجلة</h4>
+            <p className="text-gray-500">لم يتم تسجيل أي رخص في النظام حتى الآن</p>
           </div>
         )}
       </div>

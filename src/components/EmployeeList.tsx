@@ -75,7 +75,7 @@ const EmployeeList: React.FC = () => {
   const handleUpdate = async (employeeData: Partial<Employee>) => {
     if (!employeeToEdit) return;
     try {
-      await EmployeeService.update(employeeToEdit.id, employeeData);
+      await EmployeeService.update(String(employeeToEdit.id), employeeData);
       setMessage({ type: 'success', text: 'تم تحديث بيانات الموظف بنجاح' });
       setShowEditModal(false);
       setEmployeeToEdit(null);
@@ -100,7 +100,7 @@ const EmployeeList: React.FC = () => {
 
   const handleViewDetails = async (employee: Employee) => {
     try {
-      const licenses = await LicenseService.getByEmployee(employee.id);
+      const licenses = await LicenseService.getByEmployee(String(employee.id));
       setSelectedEmployee(employee);
       setEmployeeLicenses(licenses);
       setShowDetailsModal(true);
@@ -115,13 +115,6 @@ const EmployeeList: React.FC = () => {
     setShowEditModal(true);
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -135,17 +128,33 @@ const EmployeeList: React.FC = () => {
   }
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen font-sans" dir="rtl">
-      <div className="bg-white p-6 rounded-2xl shadow-lg">
-        <div className="flex flex-col md:flex-row justify-between items-center mb-6">
-          <div className="flex items-center gap-3">
-            <Users className="w-8 h-8 text-primary-600" />
-            <h1 className="text-2xl font-bold text-gray-800">إدارة الموظفين</h1>
+    <div className="space-y-8">
+      <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden hover:shadow-2xl transition-all duration-500">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
+                <Users className="w-7 h-7 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white">إدارة الموظفين</h1>
+                <p className="text-blue-100 text-sm mt-1">إجمالي {filteredEmployees.length} موظف من أصل {employees.length}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="bg-white/20 px-4 py-2 rounded-xl">
+                <span className="text-white font-bold text-lg">{filteredEmployees.length}</span>
+                <span className="text-blue-100 text-sm mr-1">موظف</span>
+              </div>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="bg-white text-blue-600 px-6 py-3 rounded-xl font-semibold hover:bg-blue-50 transition-colors duration-200 flex items-center gap-2"
+              >
+                <Plus size={20} />
+                إضافة موظف جديد
+              </button>
+            </div>
           </div>
-          <button onClick={() => setShowAddModal(true)} className="btn-primary inline-flex items-center gap-2 mt-4 md:mt-0">
-            <Plus size={20} />
-            إضافة موظف جديد
-          </button>
         </div>
 
         {message && (
@@ -154,55 +163,98 @@ const EmployeeList: React.FC = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder="بحث بالاسم، الرتبة، أو رقم الملف..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="input-field pl-10"
-            />
+        <div className="search-container">
+          <div className="flex flex-wrap items-center gap-6">
+            <div className="search-input flex-grow">
+              <input
+                type="text"
+                placeholder="بحث بالاسم، الرتبة، أو رقم الملف..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 border border-secondary-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-white transition-all duration-200 shadow-sm hover:shadow-md"
+              />
+              <div className="search-icon">
+                <Search size={20} />
+              </div>
+            </div>
+            <div className="min-w-[200px]">
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="filter-select w-full"
+              >
+                <option value="">جميع الفئات</option>
+                <option value="ضابط">ضباط</option>
+                <option value="ضابط صف">ضباط صف</option>
+                <option value="مهني">مهنيين</option>
+                <option value="مدني">مدنيين</option>
+              </select>
+            </div>
           </div>
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="input-field"
-          >
-            <option value="">كل الفئات</option>
-            <option value="ضابط">ضباط</option>
-            <option value="ضابط صف">ضباط صف</option>
-            <option value="مهني">مهنيين</option>
-            <option value="مدني">مدنيين</option>
-          </select>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="table-unified">
-            <thead>
+          <table className="w-full">
+            <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
               <tr>
-                <th>م</th>
-                <th>الاسم الكامل</th>
-                <th>الرتبة</th>
-                <th>رقم الملف</th>
-                <th>الفئة</th>
-                <th>الإجراءات</th>
+                <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">م</th>
+                <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">الرتبة</th>
+                <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">الاسم الكامل</th>
+                <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">رقم الملف</th>
+                <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">الفئة</th>
+                <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 border-b-2 border-gray-200">الإجراءات</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-100">
               {filteredEmployees.map((employee, index) => (
-                <tr key={employee.id}>
-                  <td>{index + 1}</td>
-                  <td className="font-medium">{employee.full_name}</td>
-                  <td>{employee.rank}</td>
-                  <td>{employee.file_number}</td>
-                  <td><span className="category-badge">{employee.category}</span></td>
-                  <td>
+                <tr key={employee.id} className="hover:bg-blue-50 transition-colors duration-200 group">
+                  <td className="px-6 py-4 text-sm text-gray-900">
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center font-bold text-blue-600 group-hover:bg-blue-200">
+                      {index + 1}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-sm font-medium text-gray-700">
+                    <span className="bg-gray-100 px-3 py-1 rounded-full text-xs font-semibold group-hover:bg-gray-200">
+                      {employee.category === 'ضابط' || employee.category === 'ضابط صف'
+                        ? employee.rank
+                        : employee.category}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{employee.full_name}</td>
+                  <td className="px-6 py-4 text-sm text-gray-700">{employee.file_number}</td>
+                  <td className="px-6 py-4 text-sm">
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                      employee.category === 'ضابط' ? 'bg-blue-100 text-blue-800' :
+                      employee.category === 'ضابط صف' ? 'bg-purple-100 text-purple-800' :
+                      employee.category === 'مهني' ? 'bg-green-100 text-green-800' :
+                      'bg-orange-100 text-orange-800'
+                    }`}>
+                      {employee.category}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
                     <div className="flex items-center justify-center gap-2">
-                      <button onClick={() => handleViewDetails(employee)} className="btn-icon text-blue-600 hover:text-blue-800"><Eye size={18} /></button>
-                      <button onClick={() => openEditModal(employee)} className="btn-icon text-yellow-600 hover:text-yellow-800"><Edit size={18} /></button>
-                      <button onClick={() => handleDelete(employee.id)} className="btn-icon text-red-600 hover:text-red-800"><Trash2 size={18} /></button>
+                      <button
+                        onClick={() => handleViewDetails(employee)}
+                        className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all duration-200 group/btn"
+                        title="عرض التفاصيل"
+                      >
+                        <Eye className="w-4 h-4 group-hover/btn:scale-110 transition-transform duration-200" />
+                      </button>
+                      <button
+                        onClick={() => openEditModal(employee)}
+                        className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-all duration-200 group/btn"
+                        title="تعديل"
+                      >
+                        <Edit className="w-4 h-4 group-hover/btn:scale-110 transition-transform duration-200" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(String(employee.id))}
+                        className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-all duration-200 group/btn"
+                        title="حذف"
+                      >
+                        <Trash2 className="w-4 h-4 group-hover/btn:scale-110 transition-transform duration-200" />
+                      </button>
                     </div>
                   </td>
                 </tr>

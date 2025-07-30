@@ -5,6 +5,7 @@ import AddLicense from './components/AddLicense';
 import LicenseList from './components/LicenseList';
 import EmployeeList from './components/EmployeeList';
 import Reports from './components/Reports';
+import ModernReports from './components/ModernReports';
 import DataImporter from './components/DataImporter';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -22,7 +23,19 @@ function App() {
       case 'employees':
         return <EmployeeList />;
       case 'reports':
+        return <ModernReports onNavigate={setActiveTab} />;
+      case 'old-reports':
         return <Reports />;
+      case 'alerts':
+        return <div className="card text-center py-12">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">التنبيهات</h2>
+          <p className="text-gray-600">هذه الصفحة قيد التطوير</p>
+        </div>;
+      case 'settings':
+        return <div className="card text-center py-12">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">الإعدادات</h2>
+          <p className="text-gray-600">هذه الصفحة قيد التطوير</p>
+        </div>;
       case 'data-importer':
         return <DataImporter />;
       default:

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Employee } from '../types';
+import { Edit, X } from 'lucide-react';
 
 interface EditEmployeeModalProps {
   employee: Employee;
@@ -34,10 +35,22 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({ employee, onUpdat
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" dir="rtl">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl transform transition-all">
-        <h3 className="text-xl font-semibold mb-6 text-secondary-900">تعديل بيانات الموظف</h3>
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="modal-overlay animate-fade-in" dir="rtl">
+      <div className="modal-container animate-fade-in-down">
+        <div className="modal-header">
+          <h3 className="modal-title">
+            <Edit className="w-6 h-6 text-primary-600" />
+            تعديل بيانات الموظف
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-secondary-100 rounded-lg transition-colors"
+          >
+            <X className="w-5 h-5 text-secondary-600" />
+          </button>
+        </div>
+        <div className="modal-body">
+          <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-secondary-700 mb-1">الاسم الكامل *</label>
             <input
@@ -80,15 +93,16 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({ employee, onUpdat
               <option value="مدني">مدني</option>
             </select>
           </div>
-          <div className="flex justify-end space-x-2 space-x-reverse pt-6">
-            <button type="button" onClick={onClose} className="btn-secondary">
-              إلغاء
-            </button>
-            <button type="submit" className="btn-primary">
-              حفظ التغييرات
-            </button>
-          </div>
-        </form>
+            <div className="modal-footer">
+              <button type="button" onClick={onClose} className="btn-secondary">
+                إلغاء
+              </button>
+              <button type="submit" className="btn-primary">
+                حفظ التغييرات
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );
