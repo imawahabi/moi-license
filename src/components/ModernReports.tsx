@@ -37,13 +37,19 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
   const [reportConfig, setReportConfig] = useState<ReportConfig>({
     title: '',
     dateRange: {
-      startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0], // First day of current month
+    startDate: (() => {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      return `${year}-${month}-01`;
+    })(),
       endDate: new Date().toISOString().split('T')[0] // Today
     },
     categories: [],
     includeDetails: false
   });
   const [showReport, setShowReport] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
 
   // Load data on component mount
   useEffect(() => {
@@ -72,7 +78,7 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
       title: 'تفاصيل التقرير',
       description: 'أدخل عنوان التقرير والفترة الزمنية',
       icon: <FileText className="w-5 h-5" />,
-      completed: reportConfig.title && reportConfig.dateRange.startDate && reportConfig.dateRange.endDate
+      completed: reportConfig.dateRange.startDate && reportConfig.dateRange.endDate
     },
     {
       id: 2,
@@ -162,8 +168,6 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
   const handleNext = () => {
     if (currentStep < 3) {
       setCurrentStep(currentStep + 1);
-    } else {
-      setShowReport(true);
     }
   };
 
@@ -447,7 +451,7 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
                         ...prev, 
                         dateRange: { ...prev.dateRange, startDate: e.target.value }
                       }))}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                      className="w-full px-4 py-3 text-right border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                     />
                   </div>
 
@@ -460,7 +464,7 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
                         ...prev, 
                         dateRange: { ...prev.dateRange, endDate: e.target.value }
                       }))}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                      className="w-full px-4 py-3 text-right border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                     />
                   </div>
                 </div>
@@ -489,49 +493,73 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
                   <p className="text-sm text-gray-500 mt-2">اتركها فارغة لتشمل جميع الفئات</p>
                 </div>
 
-                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                  <h3 className="font-semibold text-gray-800 mb-2">إحصائيات البيانات المتاحة</h3>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-600">{employees.length}</div>
-                      <div className="text-gray-600">إجمالي الموظفين</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-600">{licenses.length}</div>
-                      <div className="text-gray-600">إجمالي الرخص</div>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                  <h3 className="font-semibold text-blue-800 mb-3">معاينة التقرير</h3>
-                  <div className="text-sm text-blue-700 space-y-2">
-                    <div className="flex justify-between">
-                      <span className="font-medium">العنوان:</span>
-                      <span className="text-right">{reportConfig.title || 'تقرير متابعة موظفي إدارة السجل العام'}</span>
+
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-6 shadow-sm">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
+                      <Eye className="w-5 h-5 text-white" />
                     </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium">الفترة:</span>
-                      <span className="text-right">{reportConfig.dateRange.startDate && reportConfig.dateRange.endDate
-                        ? `من ${new Date(reportConfig.dateRange.startDate).toLocaleDateString('en-US')} إلى ${new Date(reportConfig.dateRange.endDate).toLocaleDateString('en-US')}`
-                        : 'غير محدد'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium">الفئات:</span>
-                      <span className="text-right">{reportConfig.categories.length > 0 ? reportConfig.categories.join(', ') : 'جميع الفئات'}</span>
-                    </div>
-                    <div className="border-t border-blue-200 pt-2 mt-3">
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">عدد الموظفين في التقرير:</span>
-                        <span className="text-xl font-bold text-blue-800">{reportData.length}</span>
+                    <h3 className="text-lg font-bold text-blue-900">معاينة التقرير</h3>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Report Title Card */}
+                    <div className="bg-white rounded-xl p-4 border border-blue-100">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-600">عنوان التقرير</span>
+                        <FileText className="w-4 h-4 text-blue-500" />
                       </div>
-                      {reportData.length > 0 && (
-                        <div className="flex justify-between items-center mt-1">
-                          <span className="font-medium">إجمالي الرخص:</span>
-                          <span className="font-bold text-blue-800">{reportData.reduce((sum, emp) => sum + emp.fullDays + emp.halfDays, 0)}</span>
-                        </div>
-                      )}
+                      <p className="text-blue-900 font-semibold mt-1 text-right">
+                        {reportConfig.title || 'تقرير متابعة موظفي إدارة السجل العام'}
+                      </p>
                     </div>
+
+                    {/* Date Range Card */}
+                    <div className="bg-white rounded-xl p-4 border border-blue-100">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-600">الفترة الزمنية</span>
+                        <Calendar className="w-4 h-4 text-blue-500" />
+                      </div>
+                      <p className="text-blue-900 font-semibold mt-1 text-right">
+                        {reportConfig.dateRange.startDate && reportConfig.dateRange.endDate
+                          ? `من ${new Date(reportConfig.dateRange.startDate).toLocaleDateString('ar-US')} إلى ${new Date(reportConfig.dateRange.endDate).toLocaleDateString('ar-US')}`
+                          : 'غير محدد'}
+                      </p>
+                    </div>
+
+                    {/* Categories Card */}
+                    <div className="bg-white rounded-xl p-4 border border-blue-100">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-600">الفئات المحددة</span>
+                        <Users className="w-4 h-4 text-blue-500" />
+                      </div>
+                      <p className="text-blue-900 font-semibold mt-1 text-right">
+                        {reportConfig.categories.length > 0 ? reportConfig.categories.join(' • ') : 'جميع الفئات'}
+                      </p>
+                    </div>
+
+                    {/* Additional Statistics */}
+                    {reportData.length > 0 && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-4 border border-orange-200">
+                          <div className="text-center">
+                            <div className="text-xl font-bold text-orange-700">
+                              {reportData.reduce((sum, emp) => sum + emp.fullDays, 0)}
+                            </div>
+                            <div className="text-xs text-orange-600 font-medium">رخص يوم كامل</div>
+                          </div>
+                        </div>
+                        <div className="bg-gradient-to-br from-cyan-50 to-blue-50 rounded-xl p-4 border border-cyan-200">
+                          <div className="text-center">
+                            <div className="text-xl font-bold text-cyan-700">
+                              {reportData.reduce((sum, emp) => sum + emp.halfDays, 0)}
+                            </div>
+                            <div className="text-xs text-cyan-600 font-medium">رخص نصف يوم</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -550,56 +578,152 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
             )}
 
             {currentStep === 3 && (
-              <div className="text-center space-y-6">
-                <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-4">
-                  <CheckCircle className="w-10 h-10 text-green-600" />
+              <div className="space-y-8">
+                {/* Header */}
+                <div className="text-center">
+                  <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl mb-4 shadow-lg">
+                    <CheckCircle className="w-10 h-10 text-white" />
+                  </div>
+                  <h3 className="text-3xl font-bold text-gray-800 mb-2">مراجعة التقرير النهائية</h3>
+                  <p className="text-gray-600 max-w-lg mx-auto">
+                    راجع إحصائيات التقرير أدناه، ثم اختر معاينة التقرير أو طباعته مباشرة
+                  </p>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-800">التقرير جاهز!</h3>
-                <p className="text-gray-600 max-w-md mx-auto">
-                  تم إعداد التقرير بنجاح. يمكنك الآن معاينته وطباعته.
-                </p>
-                
-                <div className="bg-gray-50 rounded-xl p-6 max-w-md mx-auto">
-                  <div className="text-sm text-gray-700 space-y-2">
-                    <div className="flex justify-between">
-                      <span className="font-medium">عدد الموظفين:</span>
-                      <span>{reportData.length}</span>
+
+                {/* Statistics Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+                    <div className="flex items-center justify-between mb-3">
+                      <Users className="w-8 h-8 text-blue-100" />
+                      <div className="text-right">
+                        <div className="text-3xl font-bold">{reportData.length}</div>
+                        <div className="text-blue-100 text-sm font-medium">موظف</div>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium">إجمالي الرخص:</span>
-                      <span>{reportData.reduce((sum, emp) => sum + emp.fullDays + emp.halfDays, 0)}</span>
+                    <div className="text-blue-100 text-sm">إجمالي الموظفين في التقرير</div>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+                    <div className="flex items-center justify-between mb-3">
+                      <FileText className="w-8 h-8 text-green-100" />
+                      <div className="text-right">
+                        <div className="text-3xl font-bold">{reportData.reduce((sum, emp) => sum + emp.fullDays + emp.halfDays, 0)}</div>
+                        <div className="text-green-100 text-sm font-medium">رخصة</div>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium">أيام كاملة:</span>
-                      <span>{reportData.reduce((sum, emp) => sum + emp.fullDays, 0)}</span>
+                    <div className="text-green-100 text-sm">إجمالي الرخص المسجلة</div>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+                    <div className="flex items-center justify-between mb-3">
+                      <Calendar className="w-8 h-8 text-orange-100" />
+                      <div className="text-right">
+                        <div className="text-3xl font-bold">{reportData.reduce((sum, emp) => sum + emp.fullDays, 0)}</div>
+                        <div className="text-orange-100 text-sm font-medium">يوم كامل</div>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium">أنصاف أيام:</span>
-                      <span>{reportData.reduce((sum, emp) => sum + emp.halfDays, 0)}</span>
+                    <div className="text-orange-100 text-sm">رخص الأيام الكاملة</div>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+                    <div className="flex items-center justify-between mb-3">
+                      <Filter className="w-8 h-8 text-purple-100" />
+                      <div className="text-right">
+                        <div className="text-3xl font-bold">{reportData.reduce((sum, emp) => sum + emp.halfDays, 0)}</div>
+                        <div className="text-purple-100 text-sm font-medium">نصف يوم</div>
+                      </div>
+                    </div>
+                    <div className="text-purple-100 text-sm">رخص أنصاف الأيام</div>
+                  </div>
+                </div>
+
+                {/* Report Summary */}
+                <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-6 border border-gray-200">
+                  <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <Eye className="w-5 h-5" />
+                    ملخص التقرير
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-600">العنوان:</span>
+                        <span className="text-gray-800 text-right font-semibold">
+                          {reportConfig.title || 'تقرير متابعة موظفي إدارة السجل العام'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-600">الفترة:</span>
+                        <span className="text-gray-800 text-right">
+                          {new Date(reportConfig.dateRange.startDate).toLocaleDateString('ar-US')} - {new Date(reportConfig.dateRange.endDate).toLocaleDateString('ar-US')}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-600">الفئات:</span>
+                        <span className="text-gray-800 text-right">
+                          {reportConfig.categories.length > 0 ? reportConfig.categories.join(' • ') : 'جميع الفئات'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-600">إجمالي الساعات:</span>
+                        <span className="text-gray-800 text-right font-semibold">
+                          {reportData.reduce((sum, emp) => sum + emp.totalHours, 0)} ساعة
+                        </span>
+                      </div>
                     </div>
                   </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <button
+                    onClick={() => setShowPreviewModal(true)}
+                    className="flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:from-blue-700 hover:to-indigo-700"
+                  >
+                    <Eye className="w-5 h-5" />
+                    معاينة التقرير
+                  </button>
+                  <button
+                    onClick={handlePrint}
+                    className="flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-2xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:from-green-700 hover:to-emerald-700"
+                  >
+                    <Printer className="w-5 h-5" />
+                    طباعة التقرير
+                  </button>
+                </div>
+
+                {/* Back Button */}
+                <div className="text-center pt-4">
+                  <button
+                    onClick={handleBack}
+                    className="flex items-center gap-2 px-6 py-3 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-xl transition-colors mx-auto"
+                  >
+                    <ChevronLeft className="w-4 h-4 rotate-180" />
+                    العودة للخطوة السابقة
+                  </button>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Navigation */}
-          <div className="px-8 py-6 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
-            <button
-              onClick={handleBack}
-              disabled={currentStep === 1}
-              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
-                currentStep === 1
-                  ? 'text-gray-400 cursor-not-allowed'
-                  : 'text-gray-600 hover:text-gray-800 hover:bg-gray-200'
-              }`}
-            >
-              <ChevronLeft className="w-4 h-4 rotate-180" />
-              السابق
-            </button>
+          {/* Navigation - Hidden in step 3 */}
+          {currentStep < 3 && (
+            <div className="px-8 py-6 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+              <button
+                onClick={handleBack}
+                disabled={currentStep === 1}
+                className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
+                  currentStep === 1
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : 'text-gray-600 hover:text-gray-800 hover:bg-gray-200'
+                }`}
+              >
+                <ChevronLeft className="w-4 h-4 rotate-180" />
+                السابق
+              </button>
 
-            <div className="flex items-center gap-3">
-              {currentStep < 3 ? (
+              <div className="flex items-center gap-3">
                 <button
                   onClick={handleNext}
                   disabled={!steps[currentStep - 1].completed}
@@ -612,24 +736,122 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
                   التالي
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-              ) : (
-                <button
-                  onClick={generateReport}
-                  disabled={reportData.length === 0}
-                  className={`flex items-center gap-2 px-8 py-3 rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl ${
-                    reportData.length > 0
-                      ? 'bg-green-600 text-white hover:bg-green-700'
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  }`}
-                >
-                  <Eye className="w-4 h-4" />
-                  {reportData.length > 0 ? 'عرض التقرير' : 'لا توجد بيانات'}
-                </button>
-              )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Preview Modal */}
+      {showPreviewModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-white">معاينة التقرير</h3>
+              <button
+                onClick={() => setShowPreviewModal(false)}
+                className="text-white hover:text-gray-200 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+              {/* Report Header */}
+              <div className="text-center mb-8 pb-6 border-b border-gray-200">
+                <h1 className="text-2xl font-bold text-gray-800 mb-2">
+                  {reportConfig.title || 'تقرير متابعة موظفي إدارة السجل العام'}
+                </h1>
+                <p className="text-gray-600">
+                  من تاريخ {new Date(reportConfig.dateRange.startDate).toLocaleDateString('ar-US')}
+                  إلى تاريخ {new Date(reportConfig.dateRange.endDate).toLocaleDateString('ar-US')}
+                </p>
+                {reportConfig.categories.length > 0 && (
+                  <p className="text-blue-600 font-semibold mt-2">
+                    ( {reportConfig.categories.join(' / ')} )
+                  </p>
+                )}
+              </div>
+
+              {/* Report Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse border border-gray-300 text-sm">
+                  <thead>
+                    <tr className="bg-blue-600 text-white">
+                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">#</th>
+                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">الاسم الكامل</th>
+                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">الرتبة</th>
+                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">الفئة</th>
+                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">أيام كاملة</th>
+                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">أنصاف أيام</th>
+                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">إجمالي الساعات</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reportData.map((item, index) => (
+                      <tr key={item.employee.id} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                        <td className="border border-gray-300 px-4 py-3 text-center font-medium">{index + 1}</td>
+                        <td className="border border-gray-300 px-4 py-3 text-right font-semibold">{item.employee.full_name}</td>
+                        <td className="border border-gray-300 px-4 py-3 text-center">{item.employee.rank}</td>
+                        <td className="border border-gray-300 px-4 py-3 text-center">{item.employee.category}</td>
+                        <td className="border border-gray-300 px-4 py-3 text-center font-bold text-blue-600">{item.fullDays}</td>
+                        <td className="border border-gray-300 px-4 py-3 text-center font-bold text-green-600">{item.halfDays}</td>
+                        <td className="border border-gray-300 px-4 py-3 text-center font-bold text-purple-600">{item.totalHours}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Summary Footer */}
+              <div className="mt-6 bg-gray-50 rounded-xl p-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                  <div>
+                    <div className="text-2xl font-bold text-blue-600">{reportData.length}</div>
+                    <div className="text-sm text-gray-600">إجمالي الموظفين</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-green-600">{reportData.reduce((sum, emp) => sum + emp.fullDays + emp.halfDays, 0)}</div>
+                    <div className="text-sm text-gray-600">إجمالي الرخص</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-orange-600">{reportData.reduce((sum, emp) => sum + emp.fullDays, 0)}</div>
+                    <div className="text-sm text-gray-600">أيام كاملة</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-purple-600">{reportData.reduce((sum, emp) => sum + emp.halfDays, 0)}</div>
+                    <div className="text-sm text-gray-600">أنصاف أيام</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-t border-gray-200">
+              <button
+                onClick={() => setShowPreviewModal(false)}
+                className="px-6 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                إغلاق
+              </button>
+              <button
+                onClick={() => {
+                  setShowPreviewModal(false);
+                  handlePrint();
+                }}
+                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Printer className="w-4 h-4" />
+                طباعة
+              </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

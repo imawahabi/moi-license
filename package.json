@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.51.0",
+    "date-fns": "^4.1.0",
     "docx": "^9.5.1",
     "file-saver": "^2.0.5",
     "jspdf": "^3.0.1",
@@ -24,6 +25,7 @@
     "lucide-react": "^0.344.0",
     "pdfmake": "^0.2.20",
     "react": "^18.3.1",
+    "react-datepicker": "^8.4.0",
     "react-dom": "^18.3.1",
     "react-select": "^5.10.2"
   },

@@ -115,6 +115,20 @@ const EmployeeList: React.FC = () => {
     setShowEditModal(true);
   };
 
+// Show loading state
+      if (loading) {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center">
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 animate-pulse">
+                <Users className="w-8 h-8 text-white" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-800 mb-2">جاري تحميل البيانات...</h2>
+              <p className="text-gray-600">يرجى الانتظار</p>
+            </div>
+          </div>
+        );
+      }
 
   if (error) {
     return (
@@ -129,7 +143,7 @@ const EmployeeList: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden hover:shadow-2xl transition-all duration-500">
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden hover:shadow-2xl transition-all duration-500">
         <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">

@@ -10,7 +10,8 @@ interface LayoutProps {
 const getPageTitle = (activeTab: string): string => {
   const titles: Record<string, string> = {
     'dashboard': 'لوحة التحكم',
-    'add-license': 'تسجيل رخصة جديدة',
+    'modern-add-license': 'إضافة رخصة متطورة',
+    'add-license': 'تسجيل رخصة تقليدية',
     'licenses': 'قائمة الرخص',
     'employees': 'إدارة الموظفين',
     'reports': 'التقارير الحديثة',
@@ -22,6 +23,7 @@ const getPageTitle = (activeTab: string): string => {
 const getPageSubtitle = (activeTab: string): string => {
   const subtitles: Record<string, string> = {
     'dashboard': 'نظرة شاملة على إحصائيات النظام',
+    'modern-add-license': 'نظام متطور لإضافة الرخص بخطوات سهلة ومنظمة',
     'add-license': 'إضافة رخصة جديدة لموظف أو عدة موظفين',
     'licenses': 'عرض وإدارة جميع الرخص المسجلة',
     'employees': 'إدارة بيانات الموظفين',

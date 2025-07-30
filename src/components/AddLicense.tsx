@@ -1,513 +1,791 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Search, AlertTriangle, CheckCircle, X, Calendar } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Plus, Users, Calendar, CheckCircle, ChevronLeft, Eye, FileText, AlertTriangle, Search, X } from 'lucide-react';
 import { LicenseService } from '../services/licenseService';
 import { EmployeeService } from '../services/employeeService';
 import { Employee, License } from '../types';
+import DatePicker, { registerLocale } from 'react-datepicker';
+import ar from 'date-fns/locale/ar-SA';
+import 'react-datepicker/dist/react-datepicker.css';
 
-const AddLicense: React.FC = () => {
+// Register Arabic locale for DatePicker
+registerLocale('ar', ar);
+
+// CSS for Arabic DatePicker
+const arabicCalendarStyles = `
+  /* React DatePicker Arabic Styles */
+  .react-datepicker-wrapper {
+    width: 100%;
+  }
+
+  .react-datepicker__input-container input {
+    direction: rtl !important;
+    text-align: right !important;
+  }
+
+  .react-datepicker {
+    direction: rtl !important;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+    border: 2px solid #e5e7eb !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
+  }
+
+  .react-datepicker__header {
+    background-color: #3b82f6 !important;
+    border-bottom: none !important;
+    border-radius: 10px 10px 0 0 !important;
+    padding: 16px !important;
+  }
+
+  .react-datepicker__current-month {
+    color: white !important;
+    font-weight: bold !important;
+    font-size: 16px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .react-datepicker__day-names {
+    display: flex !important;
+    flex-direction: row-reverse !important;
+  }
+
+  .react-datepicker__day-name {
+    color: white !important;
+    font-weight: 600 !important;
+    width: 32px !important;
+    height: 32px !important;
+    line-height: 32px !important;
+    margin: 2px !important;
+  }
+
+  .react-datepicker__month {
+    margin: 8px !important;
+  }
+
+  .react-datepicker__week {
+    display: flex !important;
+    flex-direction: row-reverse !important;
+  }
+
+  .react-datepicker__day {
+    width: 32px !important;
+    height: 32px !important;
+    line-height: 32px !important;
+    margin: 2px !important;
+    border-radius: 8px !important;
+    transition: all 0.2s ease !important;
+  }
+
+  .react-datepicker__day:hover {
+    background-color: #dbeafe !important;
+    color: #1d4ed8 !important;
+  }
+
+  .react-datepicker__day--selected {
+    background-color: #3b82f6 !important;
+    color: white !important;
+    font-weight: bold !important;
+  }
+
+  .react-datepicker__day--today {
+    background-color: #fef3c7 !important;
+    color: #92400e !important;
+    font-weight: bold !important;
+  }
+
+  .react-datepicker__navigation {
+    top: 20px !important;
+  }
+
+  .react-datepicker__navigation--previous {
+    right: 20px !important;
+    left: auto !important;
+  }
+
+  .react-datepicker__navigation--next {
+    left: 20px !important;
+    right: auto !important;
+  }
+
+  .react-datepicker__navigation-icon::before {
+    border-color: white !important;
+  }
+
+  .react-datepicker__triangle {
+    display: none !important;
+  }
+`;
+
+interface LicenseConfig {
+  selectedEmployee: Employee | null;
+  licenseType: 'يوم كامل' | 'نصف يوم';
+  licenseDate: Date | null;
+  hours?: number;
+}
+
+interface LicenseStep {
+  id: number;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  completed: boolean;
+}
+
+interface AddLicenseProps {
+  onNavigate?: (tab: string) => void;
+}
+
+const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentStep, setCurrentStep] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-  const [selectedEmployees, setSelectedEmployees] = useState<Employee[]>([]);
-  const [multiSelectMode, setMultiSelectMode] = useState(false);
-  const [licenseType, setLicenseType] = useState<'يوم كامل' | 'نصف يوم'>('يوم كامل');
-  const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
-  const [licenseDate, setLicenseDate] = useState(todayStr);
-  const [hours, setHours] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'warning', text: string } | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<License[] | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'warning', text: string } | null>(null);
 
+  const [licenseConfig, setLicenseConfig] = useState<LicenseConfig>({
+    selectedEmployee: null,
+    licenseType: 'يوم كامل',
+    licenseDate: new Date(),
+    hours: undefined
+  });
+
+  // Add CSS for Arabic DatePicker
   useEffect(() => {
-    loadEmployees();
+    const styleElement = document.createElement('style');
+    styleElement.textContent = arabicCalendarStyles;
+    document.head.appendChild(styleElement);
+
+    return () => {
+      if (document.head.contains(styleElement)) {
+        document.head.removeChild(styleElement);
+      }
+    };
   }, []);
 
   useEffect(() => {
-    if (searchQuery) {
-      const filtered = employees.filter(emp =>
-        emp.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        emp.rank.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        emp.file_number.includes(searchQuery)
-      );
-      setFilteredEmployees(filtered);
-    } else {
-      setFilteredEmployees(employees);
-    }
-  }, [searchQuery, employees]);
+    const loadEmployees = async () => {
+      try {
+        setLoading(true);
+        const data = await EmployeeService.getAll();
+        setEmployees(data);
+      } catch (error) {
+        console.error('Error loading employees:', error);
+        setMessage({ type: 'error', text: 'فشل في تحميل قائمة الموظفين' });
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadEmployees();
+  }, []);
+
+  const filteredEmployees = useMemo(() => {
+    if (!searchQuery) return employees;
+    return employees.filter(emp =>
+      emp.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emp.rank.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emp.file_number.includes(searchQuery) ||
+      emp.category.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [employees, searchQuery]);
 
   useEffect(() => {
-    if (!multiSelectMode && selectedEmployee && licenseDate) {
-      checkDuplicates();
-    } else if (multiSelectMode && selectedEmployees.length > 0 && licenseDate) {
-      checkMultipleDuplicates();
-    } else {
-      setDuplicateWarning(null);
-    }
-  }, [selectedEmployee, selectedEmployees, licenseDate, multiSelectMode]);
-
-  const loadEmployees = async () => {
-    try {
-      const data = await EmployeeService.getAll();
-      setEmployees(data);
-      setFilteredEmployees(data);
-    } catch (error) {
-      console.error('Error loading employees:', error);
-      setMessage({ type: 'error', text: 'فشل في تحميل قائمة الموظفين' });
-    }
-  };
-
-  const checkDuplicates = async () => {
-    if (!selectedEmployee || !licenseDate) return;
-
-    try {
-      const duplicates = await LicenseService.checkDuplicateDate(selectedEmployee.id, licenseDate);
-      setDuplicateWarning(duplicates.length > 0 ? duplicates : null);
-    } catch (error) {
-      console.error('Error checking duplicates:', error);
-    }
-  };
-
-  const checkMultipleDuplicates = async () => {
-    if (selectedEmployees.length === 0 || !licenseDate) return;
-
-    try {
-      const allDuplicates: License[] = [];
-      for (const employee of selectedEmployees) {
-        const duplicates = await LicenseService.checkDuplicateDate(employee.id, licenseDate);
-        allDuplicates.push(...duplicates);
+    const checkDuplicates = async () => {
+      if (!licenseConfig.selectedEmployee || !licenseConfig.licenseDate) {
+        setDuplicateWarning(null);
+        return;
       }
-      setDuplicateWarning(allDuplicates.length > 0 ? allDuplicates : null);
-    } catch (error) {
-      console.error('Error checking multiple duplicates:', error);
+      try {
+        const dateString = licenseConfig.licenseDate.toISOString().split('T')[0];
+        const duplicates = await LicenseService.checkDuplicateDate(licenseConfig.selectedEmployee.id.toString(), dateString);
+        setDuplicateWarning(duplicates.length > 0 ? duplicates : null);
+      } catch (error) {
+        console.error('Error checking duplicates:', error);
+      }
+    };
+    checkDuplicates();
+  }, [licenseConfig.selectedEmployee, licenseConfig.licenseDate]);
+
+  const steps: LicenseStep[] = [
+    {
+      id: 1,
+      title: 'اختيار الموظف وتفاصيل الرخصة',
+      description: 'حدد الموظف والتاريخ ونوع الرخصة',
+      icon: <Users className="w-5 h-5" />,
+      completed: !!(licenseConfig.selectedEmployee && licenseConfig.licenseDate && (licenseConfig.licenseType === 'يوم كامل' || (licenseConfig.licenseType === 'نصف يوم' && licenseConfig.hours && licenseConfig.hours > 0)))
+    },
+    {
+      id: 2,
+      title: 'المراجعة والحفظ',
+      description: 'راجع البيانات واحفظ الرخصة',
+      icon: <CheckCircle className="w-5 h-5" />,
+      completed: false
+    }
+  ];
+
+  const handleNext = () => {
+    // منع المتابعة إذا كان هناك تحذير تكرار
+    if (duplicateWarning && duplicateWarning.length > 0) {
+      setMessage({
+        type: 'error',
+        text: 'لا يمكن المتابعة. يوجد رخصة مكررة للموظف في نفس التاريخ.'
+      });
+      return;
+    }
+
+    if (currentStep < 2) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const handleBack = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
     }
   };
 
   const handleEmployeeSelect = (employee: Employee) => {
-    if (multiSelectMode) {
-      if (selectedEmployees.find(emp => emp.id === employee.id)) {
-        setSelectedEmployees(selectedEmployees.filter(emp => emp.id !== employee.id));
-      } else {
-        setSelectedEmployees([...selectedEmployees, employee]);
-      }
-    } else {
-      setSelectedEmployee(employee);
-      setSearchQuery('');
-    }
+    setLicenseConfig(prev => ({
+      ...prev,
+      selectedEmployee: prev.selectedEmployee?.id === employee.id ? null : employee
+    }));
   };
 
-  const removeSelectedEmployee = (employeeId: number) => {
-    if (multiSelectMode) {
-      setSelectedEmployees(selectedEmployees.filter(emp => emp.id !== employeeId));
-    } else {
-      setSelectedEmployee(null);
-    }
+  const handleRemoveEmployee = () => {
+    setLicenseConfig(prev => ({
+      ...prev,
+      selectedEmployee: null
+    }));
   };
 
-  const toggleMultiSelectMode = () => {
-    setMultiSelectMode(!multiSelectMode);
-    setSelectedEmployee(null);
-    setSelectedEmployees([]);
-    setDuplicateWarning(null);
-    setSearchQuery('');
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const employeesToProcess = multiSelectMode ? selectedEmployees : (selectedEmployee ? [selectedEmployee] : []);
-
-    if (employeesToProcess.length === 0 || !licenseDate) {
-      setMessage({ type: 'error', text: 'يرجى اختيار موظف واحد على الأقل وتحديد التاريخ' });
+  const handleSubmit = async () => {
+    if (!licenseConfig.selectedEmployee || !licenseConfig.licenseDate) {
+      setMessage({ type: 'error', text: 'يرجى اختيار موظف وتحديد التاريخ' });
       return;
     }
 
-    if (licenseType === 'نصف يوم' && (!hours || parseInt(hours) <= 0)) {
+    if (licenseConfig.licenseType === 'نصف يوم' && (!licenseConfig.hours || licenseConfig.hours <= 0)) {
       setMessage({ type: 'error', text: 'يرجى إدخال عدد الساعات' });
       return;
     }
 
-    // Check for duplicates before submission
     if (duplicateWarning && duplicateWarning.length > 0) {
       setMessage({
         type: 'error',
-        text: 'لا يمكن إضافة رخص للموظفين المحددين. يوجد رخص مسجلة مسبقاً في نفس التاريخ.'
+        text: 'لا يمكن إضافة رخصة للموظف المحدد. يوجد رخصة مسجلة مسبقاً في نفس التاريخ.'
       });
       return;
     }
 
     setLoading(true);
     try {
-      const date = new Date(licenseDate);
-      const successfulLicenses: string[] = [];
-      const failedLicenses: string[] = [];
+      const date = licenseConfig.licenseDate;
 
-      for (const employee of employeesToProcess) {
-        try {
-          // Double check for duplicates before creating
-          const duplicates = await LicenseService.checkDuplicateDate(employee.id, licenseDate);
-          if (duplicates.length > 0) {
-            failedLicenses.push(`${employee.full_name} (يوجد رخصة مسبقة)`);
-            continue;
-          }
+      const newLicense = {
+        employee_id: licenseConfig.selectedEmployee.id,
+        license_type: licenseConfig.licenseType,
+        license_date: date.toISOString().split('T')[0],
+        hours: licenseConfig.licenseType === 'نصف يوم' ? licenseConfig.hours : undefined,
+        month: date.getMonth() + 1,
+        year: date.getFullYear(),
+        reason: '',
+        approved: true
+      };
 
-          const newLicense = {
-            employee_id: employee.id,
-            license_type: licenseType,
-            license_date: licenseDate,
-            hours: licenseType === 'نصف يوم' ? parseInt(hours) : undefined,
-            month: date.getMonth() + 1,
-            year: date.getFullYear(),
-            reason: '',
-            approved: true
-          };
+      await LicenseService.create(newLicense);
 
-          await LicenseService.create(newLicense);
-          successfulLicenses.push(employee.full_name);
-        } catch (error) {
-          console.error(`Error creating license for ${employee.full_name}:`, error);
-          failedLicenses.push(`${employee.full_name} (خطأ في الإضافة)`);
-        }
-      }
-
-      // Show results
-      if (successfulLicenses.length > 0 && failedLicenses.length === 0) {
-        setMessage({
-          type: 'success',
-          text: `تم إضافة ${successfulLicenses.length} رخصة بنجاح للموظفين: ${successfulLicenses.join(', ')}`
-        });
-      } else if (successfulLicenses.length > 0 && failedLicenses.length > 0) {
-        setMessage({
-          type: 'warning',
-          text: `تم إضافة ${successfulLicenses.length} رخصة بنجاح. فشل في إضافة ${failedLicenses.length} رخصة للموظفين: ${failedLicenses.join(', ')}`
-        });
-      } else {
-        setMessage({
-          type: 'error',
-          text: `فشل في إضافة جميع الرخص للموظفين: ${failedLicenses.join(', ')}`
-        });
-      }
+      setMessage({
+        type: 'success',
+        text: `تم تسجيل رخصة ${licenseConfig.selectedEmployee.full_name} بنجاح`
+      });
 
       // Reset form
-      setSelectedEmployee(null);
-      setSelectedEmployees([]);
-      setLicenseDate(todayStr);
-      setHours('');
+      setLicenseConfig({
+        selectedEmployee: null,
+        licenseType: 'يوم كامل',
+        licenseDate: new Date(),
+        hours: undefined
+      });
+      setCurrentStep(1);
       setSearchQuery('');
-      setDuplicateWarning(null);
-
     } catch (error) {
-      console.error('Error creating licenses:', error);
-      setMessage({ type: 'error', text: 'فشل في إضافة الرخص' });
+      console.error('Error submitting license:', error);
+      setMessage({ type: 'error', text: 'حدث خطأ أثناء حفظ الرخصة' });
     } finally {
       setLoading(false);
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ar-KW', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
-
-  return (
-    <div className="space-y-8 animate-fade-in">
-      {/* Enhanced Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-800 rounded-3xl p-8 shadow-xl">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center">
-              <Plus className="w-9 h-9 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-white">إضافة رخصة جديدة لموظف واحد أو عدة موظفين</h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={toggleMultiSelectMode}
-              className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 ${
-                multiSelectMode
-                  ? 'bg-white text-blue-600 shadow-lg hover:shadow-xl'
-                  : 'bg-white/20 text-white border border-white/30 hover:bg-white/30'
-              }`}
-            >
-              {multiSelectMode ? '✓ الوضع المتعدد مفعل' : 'تفعيل الاختيار المتعدد'}
-            </button>
-          </div>
+  if (loading && employees.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">جاري تحميل البيانات...</p>
         </div>
       </div>
+    );
+  }
 
-      {/* Message */}
-      {message && (
-        <div className={`p-4 rounded-lg flex items-center space-x-3 space-x-reverse ${
-          message.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' :
-          message.type === 'warning' ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' :
-          'bg-red-50 text-red-800 border border-red-200'
-        }`}>
-          {message.type === 'success' && <CheckCircle className="w-5 h-5" />}
-          {message.type === 'warning' && <AlertTriangle className="w-5 h-5" />}
-          {message.type === 'error' && <AlertTriangle className="w-5 h-5" />}
-          <span>{message.text}</span>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+      <div className="max-w-4xl mx-auto px-6 py-8">
+        <div className="text-center mb-12">
+          <div className="flex justify-center items-center gap-4 mb-6">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl">
+              <Plus className="w-8 h-8 text-white" />
+            </div>
+
+          </div>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">إضافة رخصة جديدة</h1>
+          <p className="text-gray-600">نظام بسيط وسريع لإضافة رخصة لموظف واحد</p>
         </div>
-      )}
 
-      {/* Main Form */}
-      <div className="card">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Employee Selection */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <label className="block text-lg font-semibold text-secondary-800">
-                {multiSelectMode ? 'اختيار الموظفين *' : 'اختيار الموظف *'}
-              </label>
-              {multiSelectMode && (
-                <span className="text-sm text-primary-600 font-medium">
-                  تم اختيار {selectedEmployees.length} موظف
-                </span>
+        {message && (
+          <div className={`mb-6 p-8 rounded-xl border ${
+            message.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
+            message.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' :
+            'bg-yellow-50 border-yellow-200 text-yellow-800'
+          }`}>
+            <div className="flex items-center gap-2">
+              {message.type === 'success' ? <CheckCircle className="w-5 h-5" /> :
+               message.type === 'error' ? <X className="w-5 h-5" /> :
+               <AlertTriangle className="w-5 h-5" />}
+              <span className="font-bold">{message.text}</span>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-center mb-12">
+          {steps.map((step, index) => (
+            <div key={step.id} className="flex items-center">
+              <div className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-300 ${
+                currentStep === step.id
+                  ? 'bg-blue-600 text-white shadow-lg'
+                  : step.completed
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-gray-100 text-gray-500'
+              }`}>
+                {step.completed ? (
+                  <CheckCircle className="w-5 h-5" />
+                ) : (
+                  step.icon
+                )}
+                <span className="font-medium">{step.title}</span>
+              </div>
+              {index < steps.length - 1 && (
+                <ChevronLeft className="w-5 h-5 text-gray-400 mx-2" />
               )}
             </div>
-            
-            {/* Search Input */}
-            <div className="relative">
-              <Search className="absolute left-3 top-3 w-4 h-4 text-secondary-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="البحث عن موظف (الاسم، الرتبة، رقم الملف)"
-                className="input-field pl-10"
-              />
-            </div>
+          ))}
+        </div>
 
-            {/* Selected Employees Display */}
-            {!multiSelectMode && selectedEmployee && (
-              <div className="p-4 bg-primary-50 border border-primary-200 rounded-xl">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold text-primary-900">{selectedEmployee.full_name}</p>
-                    <p className="text-sm text-primary-700">{selectedEmployee.rank} - {selectedEmployee.category}</p>
-                    <p className="text-sm text-primary-600">رقم الملف: {selectedEmployee.file_number}</p>
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+          <div className="px-8 py-8">
+            {/* Step 1: Employee Selection and License Details */}
+            {currentStep === 1 && (
+              <div className="space-y-8">
+                <div className="text-center">
+                  <h2 className="text-2xl font-bold text-gray-800 mb-2">إضافة رخصة جديدة</h2>
+                  <p className="text-gray-600">اختر الموظف وحدد تفاصيل الرخصة</p>
+                </div>
+
+                {/* Employee Selection Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-bold text-gray-800">اختيار الموظف</h3>
+                    {licenseConfig.selectedEmployee && (
+                      <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
+                        موظف محدد
+                      </span>
+                    )}
                   </div>
+
+                  {/* Search Bar - Only show if no employee is selected */}
+                  {!licenseConfig.selectedEmployee && (
+                    <div className="relative">
+                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                        <Search className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="ابحث بالاسم، الرتبة، رقم الملف، أو الفئة..."
+                        className="w-full pr-10 pl-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-right"
+                      />
+                    </div>
+                  )}
+
+                  {/* Selected Employee Display */}
+                  {licenseConfig.selectedEmployee && (
+                    <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="font-semibold text-green-800">تسجيل رخصة لـ</h3>
+                        <button
+                          onClick={handleRemoveEmployee}
+                          className="flex items-center gap-2 px-3 py-1 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
+                        >
+                          <X className="w-4 h-4" />
+                          اختيار موظف آخر
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-4 bg-white px-4 py-3 rounded-lg border border-green-200">
+                        <div className="text-right flex-1">
+                          <div className="font-bold text-gray-800 text-lg">{licenseConfig.selectedEmployee.rank} / {licenseConfig.selectedEmployee.full_name}</div>
+                          <div className="text-sm text-gray-500 mt-1">رقم الملف: {licenseConfig.selectedEmployee.file_number}</div>
+                        </div>
+                        <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+                          <CheckCircle className="w-5 h-5 text-white" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Employee List - Only show if no employee is selected */}
+                  {!licenseConfig.selectedEmployee && (
+                    <div className="space-y-3 max-h-64 overflow-y-auto">
+                    {filteredEmployees.length === 0 ? (
+                      <div className="text-center py-8">
+                        <Users className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                        <p className="text-gray-500">
+                          {searchQuery ? 'لا توجد نتائج للبحث' : 'لا يوجد موظفون'}
+                        </p>
+                      </div>
+                    ) : (
+                      filteredEmployees.map((employee) => {
+                        const isSelected = licenseConfig.selectedEmployee?.id === employee.id;
+                        return (
+                          <div
+                            key={employee.id}
+                            onClick={() => handleEmployeeSelect(employee)}
+                            className={`p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 hover:shadow-md ${
+                              isSelected
+                                ? 'border-green-500 bg-green-50 shadow-md'
+                                : 'border-gray-200 hover:border-green-300'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                                  isSelected ? 'bg-green-600 border-green-600' : 'border-gray-300'
+                                }`}>
+                                  {isSelected && <CheckCircle className="w-4 h-4 text-white" />}
+                                </div>
+                                <div className="text-right">
+                                  <div className="font-semibold text-gray-800">{employee.rank} / {employee.full_name}</div>
+                                  <div className="text-sm text-gray-600">رقم الملف: {employee.file_number}</div>
+                                </div>
+                              </div>
+                              <div className="text-left">
+                                <div className={`text-sm px-2 py-1 rounded-full ${
+                                  employee.category === 'ضابط' ? 'bg-blue-100 text-blue-800' :
+                                  employee.category === 'ضابط صف' ? 'bg-green-100 text-green-800' :
+                                  employee.category === 'مهني' ? 'bg-purple-100 text-purple-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {employee.category}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                    </div>
+                  )}
+                </div>
+
+                {/* License Details Section */}
+                {licenseConfig.selectedEmployee && (
+                  <div className="space-y-6 border-t border-gray-200 pt-8">
+                    <h3 className="text-lg font-bold text-gray-800">تفاصيل الرخصة</h3>
+
+                    {/* License Date */}
+                    <div className="space-y-3">
+                      <label className="block text-sm font-semibold text-gray-700">تاريخ الرخصة *</label>
+                      <div className="relative">
+                        <DatePicker
+                          selected={licenseConfig.licenseDate}
+                          onChange={(date: Date | null) => setLicenseConfig(prev => ({ ...prev, licenseDate: date }))}
+                          locale="ar"
+                          dateFormat="dd/MM/yyyy"
+                          placeholderText="اختر التاريخ"
+                          className="w-full px-4 py-3 border-2 border-gray-200 text-right rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                          calendarClassName="arabic-calendar"
+                          showPopperArrow={false}
+                          popperPlacement="bottom-start"
+                        />
+                      </div>
+                    </div>
+
+                    {/* License Type Selection */}
+                    <div className="space-y-4">
+                      <label className="block text-sm font-semibold text-gray-700">نوع الرخصة *</label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div
+                          onClick={() => setLicenseConfig(prev => ({ ...prev, licenseType: 'يوم كامل', hours: undefined }))}
+                          className={`p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 ${
+                            licenseConfig.licenseType === 'يوم كامل'
+                              ? 'border-blue-500 bg-blue-50 shadow-md'
+                              : 'border-gray-200 hover:border-blue-300'
+                          }`}
+                        >
+                          <div className="text-center">
+                            <div className={`w-8 h-8 rounded-lg mx-auto mb-2 flex items-center justify-center ${
+                              licenseConfig.licenseType === 'يوم كامل' ? 'bg-blue-600' : 'bg-gray-400'
+                            }`}>
+                              <Calendar className="w-4 h-4 text-white" />
+                            </div>
+                            <div className="font-bold text-gray-800">يوم كامل</div>
+                            <div className="text-xs text-gray-600 mt-1">8 ساعات</div>
+                          </div>
+                        </div>
+                        <div
+                          onClick={() => setLicenseConfig(prev => ({ ...prev, licenseType: 'نصف يوم' }))}
+                          className={`p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 ${
+                            licenseConfig.licenseType === 'نصف يوم'
+                              ? 'border-blue-500 bg-blue-50 shadow-md'
+                              : 'border-gray-200 hover:border-blue-300'
+                          }`}
+                        >
+                          <div className="text-center">
+                            <div className={`w-8 h-8 rounded-lg mx-auto mb-2 flex items-center justify-center ${
+                              licenseConfig.licenseType === 'نصف يوم' ? 'bg-blue-600' : 'bg-gray-400'
+                            }`}>
+                              <Calendar className="w-4 h-4 text-white" />
+                            </div>
+                            <div className="font-bold text-gray-800">نصف يوم</div>
+                            <div className="text-xs text-gray-600 mt-1">ساعات محددة</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Hours Input (if half day) */}
+                    {licenseConfig.licenseType === 'نصف يوم' && (
+                      <div className="space-y-3">
+                        <label className="block text-sm font-semibold text-gray-700">عدد ساعات الإستئذان *</label>
+                        <input
+                          type="number"
+                          value={licenseConfig.hours || ''}
+                          onChange={(e) => setLicenseConfig(prev => ({ ...prev, hours: parseInt(e.target.value) || undefined }))}
+                          placeholder="أدخل عدد الساعات"
+                          min="1"
+                          max="8"
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-right"
+                        />
+                        <p className="text-xs text-gray-500">الحد الأقصى 3 ساعات</p>
+                      </div>
+                    )}
+
+                    {/* Duplicate Warning */}
+                    {duplicateWarning && duplicateWarning.length > 0 && (
+                      <div className="bg-red-50 border-2 border-red-300 rounded-xl p-6 shadow-lg">
+                        <div className="flex items-center gap-3 text-red-800 mb-4">
+                          <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center">
+                            <AlertTriangle className="w-6 h-6 text-white" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-lg">تحذير: رخصة مكررة!</h4>
+                            <p className="text-sm">الموظف {licenseConfig.selectedEmployee?.full_name} لديه رخصة مسجلة مسبقاً في هذا التاريخ</p>
+                          </div>
+                        </div>
+                        <div className="bg-white rounded-lg p-4 border border-red-200">
+                          <p className="text-red-700 font-medium mb-3">تفاصيل الرخصة الموجودة في تاريخ {licenseConfig.licenseDate?.toLocaleDateString('ar-US', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })}:</p>
+                          <div className="space-y-2">
+                            {duplicateWarning.map((license, index) => (
+                              <div key={index} className="flex items-center gap-3 text-red-700 bg-red-50 p-3 rounded-lg border border-red-200">
+                                <X className="w-5 h-5" />
+                                <div className="flex-1">
+                                  <div className="font-bold">{license.employee?.full_name}</div>
+                                  <div className="text-sm">نوع الرخصة: {license.license_type}</div>
+                                  {license.hours && <div className="text-sm">عدد الساعات: {license.hours}</div>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Step 2: Review and Save */}
+            {currentStep === 2 && (
+              <div className="space-y-6">
+                {/* Header */}
+                <div className="text-center">
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl mb-4 shadow-lg">
+                    <CheckCircle className="w-8 h-8 text-white" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-800 mb-2">مراجعة الرخصة النهائية</h3>
+                  <p className="text-gray-500">تأكد من صحة البيانات قبل الحفظ</p>
+                </div>
+
+                {/* Main Review Card */}
+                <div className="bg-gradient-to-br from-blue-50 to-gray-50 rounded-2xl p-6 border border-blue-200 shadow-sm">
+                  {/* Employee Info */}
+                  <div className="flex items-center gap-4 mb-6 p-4 bg-white rounded-xl border border-blue-100">                    <div className="text-right flex-1">
+                      <div className="font-bold text-gray-800 text-xl text-center">
+                        {licenseConfig.selectedEmployee?.rank} / {licenseConfig.selectedEmployee?.full_name}
+                      </div>
+                      <div className="text-sm text-gray-600 mt-1 text-center">
+                        رقم الملف: {licenseConfig.selectedEmployee?.file_number}
+                      </div>
+                      <div className="text-sm text-blue-600 mt-1 font-medium text-center">
+                        {licenseConfig.selectedEmployee?.category}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* License Details */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white p-4 rounded-xl border border-gray-200">
+                      <div className="text-sm text-gray-500 mb-1">نوع الرخصة</div>
+                      <div className="font-bold text-gray-800 text-lg">{licenseConfig.licenseType}</div>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-xl border border-gray-200">
+                      <div className="text-sm text-gray-500 mb-1">التاريخ</div>
+                      <div className="font-bold text-gray-800 text-lg">
+                        {licenseConfig.licenseDate?.toLocaleDateString('ar-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Enhanced Duplicate Warning */}
+                {duplicateWarning && duplicateWarning.length > 0 && (
+                  <div className="bg-red-50 border-2 border-red-300 rounded-xl p-6 shadow-lg">
+                    <div className="flex items-center gap-3 text-red-800 mb-4">
+                      <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center">
+                        <AlertTriangle className="w-8 h-8 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-xl">خطأ: لا يمكن إضافة الرخصة!</h4>
+                        <p className="text-sm">الموظف {licenseConfig.selectedEmployee?.full_name} لديه رخصة مسجلة مسبقاً في هذا التاريخ</p>
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 border border-red-200">
+                      <p className="text-red-700 font-medium mb-3">تفاصيل الرخصة الموجودة للموظف {licenseConfig.selectedEmployee?.full_name} في تاريخ {licenseConfig.licenseDate?.toLocaleDateString('ar-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}:</p>
+                      <div className="space-y-2">
+                        {duplicateWarning.map((license, index) => (
+                          <div key={index} className="flex items-center gap-3 text-red-700 bg-red-50 p-4 rounded-lg border border-red-200">
+                            <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center">
+                              <X className="w-6 h-6 text-white" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="font-bold text-lg">{license.employee?.full_name}</div>
+                              <div className="text-sm mt-1">نوع الرخصة: <span className="font-medium">{license.license_type}</span></div>
+                              {license.hours && <div className="text-sm">عدد الساعات: <span className="font-medium">{license.hours}</span></div>}
+                              <div className="text-xs mt-1 text-red-600">تاريخ التسجيل: {new Date(license.license_date).toLocaleDateString('ar-US', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric'
+                              })}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-4 p-4 bg-red-100 rounded-lg border border-red-200">
+                        <p className="text-red-800 font-bold text-sm mb-2">
+                          ⚠️ لا يمكن إضافة رخصتين لنفس الموظف في يوم واحد
+                        </p>
+                        <p className="text-red-700 text-sm">
+                          يرجى تغيير التاريخ أو اختيار موظف آخر للمتابعة
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
                   <button
-                    type="button"
-                    onClick={() => removeSelectedEmployee(selectedEmployee.id)}
-                    className="p-2 text-primary-600 hover:text-primary-800 hover:bg-primary-100 rounded-lg transition-colors"
+                    onClick={handleSubmit}
+                    disabled={loading || !!(duplicateWarning && duplicateWarning.length > 0)}
+                    className={`flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-bold text-lg transition-all duration-200 shadow-lg ${
+                      loading || (duplicateWarning && duplicateWarning.length > 0)
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 hover:shadow-xl'
+                    }`}
                   >
-                    <X className="w-5 h-5" />
+                    {loading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        جاري الحفظ...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-5 h-5" />
+                        حفظ الرخصة
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Back Button */}
+                <div className="text-center pt-4">
+                  <button
+                    onClick={handleBack}
+                    className="flex items-center gap-2 px-6 py-3 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-xl transition-all duration-200 mx-auto border border-gray-200 hover:border-gray-300"
+                  >
+                    <ChevronLeft className="w-4 h-4 rotate-180" />
+                    العودة للخطوة السابقة
                   </button>
                 </div>
               </div>
             )}
-
-            {/* Multiple Selected Employees Display */}
-            {multiSelectMode && selectedEmployees.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-secondary-700">الموظفين المختارين:</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {selectedEmployees.map((employee) => (
-                    <div key={employee.id} className="p-3 bg-primary-50 border border-primary-200 rounded-xl">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-primary-900 text-sm">{employee.full_name}</p>
-                          <p className="text-xs text-primary-700">{employee.rank}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeSelectedEmployee(employee.id)}
-                          className="p-1 text-primary-600 hover:text-primary-800 hover:bg-primary-100 rounded transition-colors"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Employee List */}
-            {searchQuery && filteredEmployees.length > 0 && (
-              (!multiSelectMode && !selectedEmployee) || multiSelectMode
-            ) && (
-              <div className="max-h-80 overflow-y-auto border border-secondary-200 rounded-xl shadow-lg">
-                <div className="p-3 bg-secondary-50 border-b border-secondary-200">
-                  <p className="text-sm font-medium text-secondary-700">
-                    {multiSelectMode ? 'اختر الموظفين (يمكن اختيار أكثر من موظف)' : 'اختر موظف واحد'}
-                  </p>
-                </div>
-                {filteredEmployees.map((employee) => {
-                  const isSelected = multiSelectMode
-                    ? selectedEmployees.find(emp => emp.id === employee.id)
-                    : false;
-
-                  return (
-                    <button
-                      key={employee.id}
-                      type="button"
-                      onClick={() => handleEmployeeSelect(employee)}
-                      className={`w-full text-right p-4 hover:bg-secondary-50 border-b border-secondary-100 last:border-b-0 transition-colors ${
-                        isSelected ? 'bg-primary-50 border-primary-200' : ''
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-secondary-900">{employee.full_name}</p>
-                          <p className="text-sm text-secondary-600">{employee.rank} - {employee.category}</p>
-                          <p className="text-sm text-secondary-500">رقم الملف: {employee.file_number}</p>
-                        </div>
-                        {multiSelectMode && isSelected && (
-                          <div className="p-1 bg-primary-600 text-white rounded-full">
-                            <CheckCircle className="w-4 h-4" />
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {!selectedEmployee && searchQuery && filteredEmployees.length === 0 && (
-              <div className="text-center py-8 text-secondary-600">
-                <Search className="w-12 h-12 mx-auto mb-4 text-secondary-400" />
-                <p>لم يتم العثور على موظفين</p>
-              </div>
-            )}
           </div>
-          {/* Duplicate Warning */}
-          {duplicateWarning && duplicateWarning.length > 0 && (
-            <div className="p-6 bg-red-50 border-2 border-red-200 rounded-xl shadow-lg">
-              <div className="flex items-center space-x-3 space-x-reverse mb-4">
-                <div className="p-2 bg-red-100 rounded-full">
-                  <AlertTriangle className="w-6 h-6 text-red-600" />
-                </div>
-                <div>
-                  <p className="font-bold text-red-800 text-lg">تحذير: لا يمكن إضافة الرخصة</p>
-                  <p className="text-red-700">يوجد رخصة مسجلة مسبقاً لهذا الموظف في نفس التاريخ</p>
-                </div>
-              </div>
-              <div className="bg-white p-4 rounded-lg border border-red-200">
-                <p className="font-medium text-red-800 mb-2">الرخص الموجودة:</p>
-                <div className="space-y-2">
-                  {duplicateWarning.map((license) => (
-                    <div key={license.id} className="flex items-center justify-between p-2 bg-red-50 rounded-lg">
-                      <span className="text-red-700 font-medium">
-                        {license.license_type} - {new Date(license.license_date).toLocaleDateString('ar-US', { day: 'numeric', month: 'long', year: 'numeric', numberingSystem: 'latn' })}
-                      </span>
-                      {license.hours && (
-                        <span className="badge badge-danger">
-                          {license.hours} ساعات
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
+
+          {/* Navigation - Hidden in step 2 */}
+          {currentStep < 2 && (
+            <div className="px-8 py-6 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+              <button
+                onClick={handleBack}
+                disabled={currentStep === 1}
+                className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
+                  currentStep === 1
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : 'text-gray-600 hover:text-gray-800 hover:bg-gray-200'
+                }`}
+              >
+                <ChevronLeft className="w-4 h-4 rotate-180" />
+                السابق
+              </button>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleNext}
+                  disabled={!steps[0].completed || !!(duplicateWarning && duplicateWarning.length > 0)}
+                  className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
+                    steps[0].completed && !(duplicateWarning && duplicateWarning.length > 0)
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  التالي
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
               </div>
             </div>
           )}
-          
-          {/* License Type */}
-          <div className="space-y-3">
-            <label className="block text-sm font-medium text-secondary-700">
-              نوع الرخصة *
-            </label>
-            <div className="flex space-x-4 space-x-reverse">
-              <label className="flex items-center space-x-2 space-x-reverse">
-                <input
-                  type="radio"
-                  value="يوم كامل"
-                  checked={licenseType === 'يوم كامل'}
-                  onChange={(e) => setLicenseType(e.target.value as 'يوم كامل' | 'نصف يوم')}
-                  className="w-4 h-4 text-primary-600 border-secondary-300 focus:ring-primary-500"
-                />
-                <span>يوم كامل</span>
-              </label>
-              <label className="flex items-center space-x-2 space-x-reverse">
-                <input
-                  type="radio"
-                  value="نصف يوم"
-                  checked={licenseType === 'نصف يوم'}
-                  onChange={(e) => setLicenseType(e.target.value as 'يوم كامل' | 'نصف يوم')}
-                  className="w-4 h-4 text-primary-600 border-secondary-300 focus:ring-primary-500"
-                />
-                <span>نصف يوم</span>
-              </label>
-            </div>
-          </div>
-
-          {/* License Date */}
-          <div className="space-y-3">
-            <label className="block text-sm font-medium text-secondary-700">
-              تاريخ الرخصة
-              <span className="text-red-500 mx-1">*</span>
-            </label>
-            <input
-              type="date"
-              value={licenseDate}
-              onChange={(e) => setLicenseDate(e.target.value)}
-              className="input-field text-right"
-              required
-            />
-          </div>
-
-          {/* Hours (if license type is hours) */}
-          {licenseType === 'نصف يوم' && (
-            <div className="space-y-3">
-              <label className="block text-sm font-medium text-secondary-700">
-                عدد الساعات *
-              </label>
-              <input
-                type="number"
-                value={hours}
-                onChange={(e) => setHours(e.target.value)}
-                placeholder="أدخل عدد الساعات"
-                min="1"
-                max="24"
-                className="input-field"
-                required
-              />
-            </div>
-          )}
-
-          {/* Submit Button */}
-          <div className="flex justify-end space-x-4 space-x-reverse">
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedEmployee(null);
-                setLicenseDate(todayStr);
-                setHours('');
-                setSearchQuery('');
-                setMessage(null);
-                setDuplicateWarning(null);
-              }}
-              className="btn-secondary"
-            >
-              إلغاء
-            </button>
-            <button
-              type="submit"
-              disabled={
-                loading ||
-                (!multiSelectMode && !selectedEmployee) ||
-                (multiSelectMode && selectedEmployees.length === 0) ||
-                !licenseDate ||
-                Boolean(duplicateWarning && duplicateWarning.length > 0)
-              }
-              className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'جاري الحفظ...' :
-               (duplicateWarning && duplicateWarning.length > 0) ? 'لا يمكن الإضافة - يوجد تكرار' :
-               multiSelectMode ? `إضافة رخصة لـ ${selectedEmployees.length} موظف` :
-               'إضافة الرخصة'}
-            </button>
-          </div>
-        </form>
+        </div>
       </div>
     </div>
   );

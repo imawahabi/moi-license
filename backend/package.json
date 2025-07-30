@@ -13,10 +13,10 @@
     "test-db": "node test-db.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
     "mysql2": "^3.6.5",
-    "sqlite3": "^5.1.6",
-    "cors": "^2.8.5"
+    "sqlite3": "^5.1.6"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

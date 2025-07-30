@@ -40,8 +40,8 @@ const Dashboard: React.FC = () => {
     const lastMonthFullDay = lastMonthLicenses.filter(l => l.license_type === 'يوم كامل').length;
     const lastMonthHourlyCount = lastMonthLicenses.filter(l => l.license_type === 'نصف يوم').length;
 
-    // Latest license
-    const sortedLicenses = licenses.sort((a, b) => new Date(b.license_date).getTime() - new Date(a.license_date).getTime());
+    // Latest license (by creation date, not license date)
+    const sortedLicenses = licenses.sort((a, b) => new Date((b as any).created_at).getTime() - new Date((a as any).created_at).getTime());
     const latest = sortedLicenses[0] || null;
 
     // Employee categories
@@ -74,9 +74,9 @@ const Dashboard: React.FC = () => {
       // Calculate enhanced stats
       calculateEnhancedStats(licensesData, employeesData);
 
-      // Get recent licenses (last 10)
+      // Get recent licenses (last 10) - sorted by creation date (when added to system)
       const sortedLicenses = licensesData
-        .sort((a: License, b: License) => new Date(b.license_date).getTime() - new Date(a.license_date).getTime())
+        .sort((a: License, b: License) => new Date((b as any).created_at).getTime() - new Date((a as any).created_at).getTime())
         .slice(0, 10);
       setRecentLicenses(sortedLicenses);
     } catch (err) {
@@ -107,6 +107,28 @@ const Dashboard: React.FC = () => {
     return `${day}/${month}/${year}`;
   };
 
+  const getTimeAgo = (dateString: string) => {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffInMs = now.getTime() - date.getTime();
+
+    const minutes = Math.floor(diffInMs / (1000 * 60));
+    const hours = Math.floor(diffInMs / (1000 * 60 * 60));
+    const days = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+    const weeks = Math.floor(days / 7);
+    const months = Math.floor(days / 30);
+
+    if (minutes < 1) return 'الآن';
+    if (minutes < 60) return `منذ ${minutes} دقيقة`;
+    if (hours < 24) return `منذ ${hours} ساعة`;
+    if (days < 7) return `منذ ${days} يوم`;
+    if (weeks < 4) return `منذ ${weeks} أسبوع`;
+    if (months < 12) return `منذ ${months} شهر`;
+
+    const years = Math.floor(days / 365);
+    return `منذ ${years} سنة`;
+  };
+
   // حساب عدد رخص الشهر الحالي
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
@@ -121,13 +143,21 @@ const Dashboard: React.FC = () => {
   }, {} as Record<string, number>);
   const mostLicensesEmployeeMonth = Object.entries(licenseCountByEmployeeMonth).sort((a, b) => b[1] - a[1])[0];
 
+  // Show loading state
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 animate-pulse">
+            <UserCheck className="w-8 h-8 text-white" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">جاري تحميل البيانات...</h2>
+          <p className="text-gray-600">يرجى الانتظار</p>
+        </div>
       </div>
     );
   }
+
 
   if (error) {
     return (
@@ -275,7 +305,7 @@ const Dashboard: React.FC = () => {
               </div>
               <div>
                 <h3 className="text-2xl font-bold text-white">آخر الرخص المسجلة</h3>
-                <p className="text-blue-100 text-sm mt-1">عرض أحدث 10 رخص تم تسجيلها في النظام</p>
+                <p className="text-blue-100 text-sm mt-1">عرض أحدث 10 رخص حسب تاريخ الإضافة للنظام</p>
               </div>
             </div>
             <div className="bg-white/20 px-4 py-2 rounded-xl">
@@ -296,6 +326,7 @@ const Dashboard: React.FC = () => {
                   <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">نوع الرخصة</th>
                   <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">تاريخ الرخصة</th>
                   <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">الساعات</th>
+                  <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">سجلت منذ</th>
                   <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 border-b-2 border-gray-200">الإجراءات</th>
                 </tr>
               </thead>
@@ -335,8 +366,13 @@ const Dashboard: React.FC = () => {
                           {license.hours.toLocaleString('en')} ساعات
                         </span>
                       ) : (
-                        <span className="text-gray-400 font-medium">-</span>
+                        <span className="text-gray-400 font-medium">يوم كامل</span>
                       )}
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-bold">
+                        {getTimeAgo((license as any).created_at)}
+                      </span>
                     </td>
                     <td className="px-6 py-4 text-center">
                       <button
