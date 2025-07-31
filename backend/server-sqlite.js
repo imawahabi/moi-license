@@ -171,10 +171,10 @@ app.delete('/api/employees/:id', async (req, res) => {
 app.get('/api/licenses', async (req, res) => {
   try {
     const rows = await dbAll(`
-      SELECT l.*, e.full_name, e.rank, e.file_number, e.category 
-      FROM licenses l 
-      JOIN employees e ON l.employee_id = e.id 
-      ORDER BY l.license_date DESC
+      SELECT l.*, e.full_name, e.rank, e.file_number, e.category
+      FROM licenses l
+      JOIN employees e ON l.employee_id = e.id
+      ORDER BY l.created_at DESC, l.license_date DESC
     `);
     res.json(rows);
   } catch (error) {
@@ -187,11 +187,11 @@ app.get('/api/licenses', async (req, res) => {
 app.get('/api/licenses/employee/:employeeId', async (req, res) => {
   try {
     const rows = await dbAll(`
-      SELECT l.*, e.full_name, e.rank, e.file_number, e.category 
-      FROM licenses l 
-      JOIN employees e ON l.employee_id = e.id 
-      WHERE l.employee_id = ? 
-      ORDER BY l.license_date DESC
+      SELECT l.*, e.full_name, e.rank, e.file_number, e.category
+      FROM licenses l
+      JOIN employees e ON l.employee_id = e.id
+      WHERE l.employee_id = ?
+      ORDER BY l.created_at DESC, l.license_date DESC
     `, [req.params.employeeId]);
     res.json(rows);
   } catch (error) {

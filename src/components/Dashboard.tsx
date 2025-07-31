@@ -129,13 +129,13 @@ const Dashboard: React.FC = () => {
     return `منذ ${years} سنة`;
   };
 
-  // حساب عدد رخص الشهر الحالي
+  // حساب عدد استئذانات الشهر الحالي
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
   const licensesThisMonth = recentLicenses.filter(l => l.month === currentMonth && l.year === currentYear);
 
-  // أكثر موظف حصل على رخص خلال الشهر الحالي
+  // أكثر موظف حصل على استئذانات خلال الشهر الحالي
   const licenseCountByEmployeeMonth = licensesThisMonth.reduce((acc, l) => {
     if (!l.employee) return acc;
     acc[l.employee.full_name] = (acc[l.employee.full_name] || 0) + 1;
@@ -185,14 +185,14 @@ const Dashboard: React.FC = () => {
           </div>
           <div className="pt-4">
             <div className="text-4xl font-bold text-blue-900 mb-2">{currentMonthStats.total.toLocaleString('en')}</div>
-            <div className="text-lg font-semibold text-blue-700 mb-4">رخص الشهر الحالي</div>
+            <div className="text-lg font-semibold text-blue-700 mb-4">استئذانات الشهر الحالي</div>
             <div className="space-y-2">
               <div className="flex items-center justify-between bg-white/60 rounded-lg px-3 py-2">
-                <span className="text-sm font-medium text-blue-600">يوم كامل</span>
+                <span className="text-sm font-medium text-blue-600">استئذانات طويلة</span>
                 <span className="text-sm font-bold text-green-600">{currentMonthStats.fullDay}</span>
               </div>
               <div className="flex items-center justify-between bg-white/60 rounded-lg px-3 py-2">
-                <span className="text-sm font-medium text-blue-600">رخص الساعات المحددة</span>
+                <span className="text-sm font-medium text-blue-600">استئذانات قصيرة</span>
                 <span className="text-sm font-bold text-orange-600">{currentMonthStats.hourly}</span>
               </div>
             </div>
@@ -208,14 +208,14 @@ const Dashboard: React.FC = () => {
           </div>
           <div className="pt-4">
             <div className="text-4xl font-bold text-gray-900 mb-2">{lastMonthStats.total.toLocaleString('en')}</div>
-            <div className="text-lg font-semibold text-gray-700 mb-4">رخص الشهر الماضي</div>
+            <div className="text-lg font-semibold text-gray-700 mb-4">استئذانات الشهر الماضي</div>
             <div className="space-y-2">
               <div className="flex items-center justify-between bg-white/60 rounded-lg px-3 py-2">
-                <span className="text-sm font-medium text-gray-600">يوم كامل</span>
+                <span className="text-sm font-medium text-gray-600">استئذانات طويلة</span>
                 <span className="text-sm font-bold text-green-600">{lastMonthStats.fullDay}</span>
               </div>
               <div className="flex items-center justify-between bg-white/60 rounded-lg px-3 py-2">
-                <span className="text-sm font-medium text-gray-600">رخص الساعات المحددة</span>
+                <span className="text-sm font-medium text-gray-600">استئذانات قصيرة</span>
                 <span className="text-sm font-bold text-orange-600">{lastMonthStats.hourly}</span>
               </div>
             </div>
@@ -230,7 +230,7 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="pt-20">
-            <div className="text-sm font-semibold text-green-700 mb-2">آخر رخصة مسجلة</div>
+            <div className="text-sm font-semibold text-green-700 mb-2">آخر استئذان مسجل</div>
             {latestLicense ? (
               <>
                 <div className="text-base font-bold text-green-900 mb-2 leading-tight">
@@ -242,7 +242,7 @@ const Dashboard: React.FC = () => {
                       ? 'bg-green-200 text-green-800'
                       : 'bg-orange-200 text-orange-800'
                   }`}>
-                    {latestLicense.license_type}
+                    {latestLicense.license_type === 'يوم كامل' ? 'استئذان طويل' : 'استئذان قصير'}
                   </span>
                   {latestLicense.hours && (
                     <span className="text-xs font-medium text-green-600">
@@ -252,7 +252,7 @@ const Dashboard: React.FC = () => {
                 </div>
               </>
             ) : (
-              <div className="text-green-600">لا توجد رخص</div>
+              <div className="text-green-600">لا توجد استئذانات</div>
             )}
           </div>
         </div>
@@ -301,13 +301,13 @@ const Dashboard: React.FC = () => {
                 <FileText className="w-7 h-7 text-white" />
               </div>
               <div>
-                <h3 className="text-2xl font-bold text-white">آخر الرخص المسجلة</h3>
-                <p className="text-blue-100 text-sm mt-1">عرض أحدث 10 رخص حسب تاريخ الإضافة للنظام</p>
+                <h3 className="text-2xl font-bold text-white">آخر الاستئذانات المسجلة</h3>
+                <p className="text-blue-100 text-sm mt-1">عرض أحدث 10 استئذانات حسب تاريخ الإضافة للنظام</p>
               </div>
             </div>
             <div className="bg-white/20 px-4 py-2 rounded-xl">
               <span className="text-white font-bold text-lg">{recentLicenses.length}</span>
-              <span className="text-blue-100 text-sm mr-1">رخصة</span>
+              <span className="text-blue-100 text-sm mr-1">استئذان</span>
             </div>
           </div>
         </div>
@@ -320,8 +320,8 @@ const Dashboard: React.FC = () => {
                   <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">م</th>
                   <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">الرتبة</th>
                   <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">اسم الموظف</th>
-                  <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">نوع الرخصة</th>
-                  <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">تاريخ الرخصة</th>
+                  <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">نوع الاستئذان</th>
+                  <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">تاريخ الاستئذان</th>
                   <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">الساعات</th>
                   <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">سجلت منذ</th>
                   <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 border-b-2 border-gray-200">الإجراءات</th>
@@ -335,12 +335,10 @@ const Dashboard: React.FC = () => {
                         {index + 1}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-700">
-                      <span className="bg-gray-100 px-3 py-1 rounded-full text-xs font-bold group-hover:bg-gray-200">
-                        {license.employee?.category === 'ضابط' || license.employee?.category === 'ضابط صف'
-                          ? license.employee?.rank
-                          : license.employee?.category}
-                      </span>
+                    <td className="px-6 py-4 text-sm text-gray-700">
+                      {license.employee?.category === 'ضابط' || license.employee?.category === 'ضابط صف'
+                        ? license.employee?.rank
+                        : license.employee?.category}
                     </td>
                     <td className="px-6 py-4 text-sm font-bold text-gray-900">
                       {license.employee?.full_name}
@@ -351,7 +349,7 @@ const Dashboard: React.FC = () => {
                           ? 'bg-green-100 text-green-800 border border-green-200'
                           : 'bg-orange-100 text-orange-800 border border-orange-200'
                       }`}>
-                        {license.license_type}
+                        {license.license_type === 'يوم كامل' ? 'استئذان طويل' : 'استئذان قصير'}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-700 font-bold">
@@ -363,7 +361,7 @@ const Dashboard: React.FC = () => {
                           {license.hours.toLocaleString('en')} ساعات
                         </span>
                       ) : (
-                        <span className="text-gray-400 font-medium">يوم كامل</span>
+                        <span className="text-gray-400 font-medium">استئذان طويل</span>
                       )}
                     </td>
                     <td className="px-6 py-4 text-sm">
@@ -390,8 +388,8 @@ const Dashboard: React.FC = () => {
             <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <FileText className="w-10 h-10 text-gray-400" />
             </div>
-            <h4 className="text-lg font-semibold text-gray-700 mb-2">لا توجد رخص مسجلة</h4>
-            <p className="text-gray-500">لم يتم تسجيل أي رخص في النظام حتى الآن</p>
+            <h4 className="text-lg font-semibold text-gray-700 mb-2">لا توجد استئذانات مسجلة</h4>
+            <p className="text-gray-500">لم يتم تسجيل أي استئذانات في النظام حتى الآن</p>
           </div>
         )}
       </div>

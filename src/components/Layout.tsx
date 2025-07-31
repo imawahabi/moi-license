@@ -10,29 +10,29 @@ interface LayoutProps {
 const getPageTitle = (activeTab: string): string => {
   const titles: Record<string, string> = {
     'dashboard': 'لوحة التحكم',
-    'modern-add-license': 'إضافة رخصة متطورة',
-    'add-license': 'تسجيل رخصة تقليدية',
-    'licenses': 'قائمة الرخص',
+    'modern-add-license': 'إضافة استئذان متطور',
+    'add-license': 'تسجيل استئذان تقليدي',
+    'licenses': 'سجلات الاستئذانات',
     'employees': 'إدارة الموظفين',
     'reports': 'إنشاء تقرير جديد',
     'old-reports': 'التقارير الشاملة',
   };
-  return titles[activeTab] || 'نظام إدارة الرخص';
+  return titles[activeTab] || 'نظام إدارة الاستئذانات';
 };
 
 const getPageSubtitle = (activeTab: string): string => {
   const subtitles: Record<string, string> = {
     'dashboard': 'نظرة شاملة على إحصائيات النظام',
-    'modern-add-license': 'نظام متطور لإضافة الرخص بخطوات سهلة ومنظمة',
-    'add-license': 'إضافة رخصة جديدة لموظف أو عدة موظفين',
-    'licenses': 'عرض وإدارة جميع الرخص المسجلة',
+    'modern-add-license': 'نظام متطور لإضافة الاستئذانات بخطوات سهلة ومنظمة',
+    'add-license': 'إضافة استئذان جديد لموظف أو عدة موظفين',
+    'licenses': 'عرض وإدارة جميع الاستئذانات المسجلة',
     'employees': 'إدارة بيانات الموظفين',
     'reports': 'نظام متطور لإنشاء التقارير بخطوات سهلة ومنظمة',
     'old-reports': 'تقارير وإحصائيات مفصلة بالطريقة التقليدية',
     'alerts': 'التنبيهات والإشعارات',
     'settings': 'إعدادات النظام'
   };
-  return subtitles[activeTab] || 'نظام إدارة رخص السجل العام';
+  return subtitles[activeTab] || 'نظام إدارة استئذانات السجل العام';
 };
 
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => {

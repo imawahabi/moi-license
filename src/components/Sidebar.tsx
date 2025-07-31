@@ -23,8 +23,8 @@ interface NavigationItem {
 
 const navigation: NavigationItem[] = [
   { id: 'dashboard', name: 'لوحة التحكم', icon: BarChart3, category: 'main' },
-  { id: 'add-license', name: 'إضافة رخصة جديدة', icon: PlusCircle, category: 'main' },
-  { id: 'licenses', name: 'سجلات الرخص', icon: FolderOpen, category: 'main' },
+  { id: 'add-license', name: 'إضافة استئذان جديد', icon: PlusCircle, category: 'main' },
+  { id: 'licenses', name: 'سجلات الاستئذانات', icon: FolderOpen, category: 'main' },
   { id: 'employees', name: 'إدارة الموظفين', icon: Users, category: 'main' },
   { id: 'reports', name: 'إنشاء تقرير جديد', icon: FileBarChart, category: 'management' },
   { id: 'old-reports', name: 'التقارير الشاملة', icon: BarChart4, category: 'management' },
@@ -93,7 +93,7 @@ export default function Sidebar({ isCollapsed, onToggle, currentPage, onPageChan
               {/* System Info */}
               <div className="text-center space-y-1 mt-2">
                 <h1 className="text-lg font-bold text-white drop-shadow-md">
-                  نظام متابعة الرخص
+                  نظام متابعة الاستئذانات
                 </h1>
                 <p className="text-blue-100 text-xs font-medium drop-shadow">
                 إدارة السجل العام
@@ -182,7 +182,7 @@ export default function Sidebar({ isCollapsed, onToggle, currentPage, onPageChan
           <div className="text-center">
             <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
               <p className="text-xs font-medium text-gray-700">الإصدار 1.0</p>
-              <p className="text-xs text-gray-500">نظام إدارة الرخص</p>
+              <p className="text-xs text-gray-500">نظام إدارة الاستئذانات</p>
             </div>
           </div>
         ) : (

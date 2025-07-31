@@ -22,6 +22,7 @@ export const NCO_RANK_ORDER: { [key: string]: number } = {
   'رقيب': 4,
   'عريف': 5,
   'و.عريف': 6,
+  'شرطي': 7
 };
 
 export const sortEmployees = (employees: Employee[]): Employee[] => {

@@ -26,6 +26,11 @@ const currentDate = new Date();
 const currentYear = currentDate.getFullYear();
 const currentMonth = currentDate.getMonth() + 1;
 
+// Helper function to generate creation dates with different times
+const getCreatedAt = (daysAgo: number, hoursAgo: number = 0) => {
+  return new Date(Date.now() - (daysAgo * 24 * 60 * 60 * 1000) - (hoursAgo * 60 * 60 * 1000)).toISOString();
+};
+
 let mockLicenses: any[] = [
   // أحمد الكندري - تجاوز الحد (5 استئذانات قصيرة)
   {
@@ -36,7 +41,7 @@ let mockLicenses: any[] = [
     hours: 4,
     month: currentMonth,
     year: currentYear,
-    created_at: new Date().toISOString(),
+    created_at: getCreatedAt(1, 2), // 1 day and 2 hours ago
     updated_at: new Date().toISOString(),
     full_name: 'أحمد محمد ملا علي',
     rank: 'ملازم أول',
@@ -51,7 +56,7 @@ let mockLicenses: any[] = [
     hours: 4,
     month: currentMonth,
     year: currentYear,
-    created_at: new Date().toISOString(),
+    created_at: getCreatedAt(0, 1), // 1 hour ago
     updated_at: new Date().toISOString(),
     full_name: 'أحمد محمد ملا علي',
     rank: 'ملازم أول',
@@ -66,7 +71,7 @@ let mockLicenses: any[] = [
     hours: 4,
     month: currentMonth,
     year: currentYear,
-    created_at: new Date().toISOString(),
+    created_at: getCreatedAt(2, 3), // 2 days and 3 hours ago
     updated_at: new Date().toISOString(),
     full_name: 'أحمد محمد ملا علي',
     rank: 'ملازم أول',
@@ -81,7 +86,7 @@ let mockLicenses: any[] = [
     hours: 4,
     month: currentMonth,
     year: currentYear,
-    created_at: new Date().toISOString(),
+    created_at: getCreatedAt(3, 1), // 3 days and 1 hour ago
     updated_at: new Date().toISOString(),
     full_name: 'أحمد محمد ملا علي',
     rank: 'ملازم أول',
@@ -398,8 +403,8 @@ export class LicenseService {
         rank: license.rank,
         file_number: license.file_number,
         category: license.category,
-        created_at: '',
-        updated_at: ''
+        created_at: license.employee_created_at || '',
+        updated_at: license.employee_updated_at || ''
       }
     }));
   }

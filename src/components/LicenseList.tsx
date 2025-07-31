@@ -17,18 +17,21 @@ const getTimeSince = (createdAt: string) => {
   const created = new Date(createdAt);
   const diffInMs = now.getTime() - created.getTime();
 
+  const minutes = Math.floor(diffInMs / (1000 * 60));
   const hours = Math.floor(diffInMs / (1000 * 60 * 60));
   const days = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
   const weeks = Math.floor(days / 7);
   const months = Math.floor(days / 30);
-  const years = Math.floor(days / 365);
 
-  if (years > 0) return `${years} سنة`;
-  if (months > 0) return `${months} شهر`;
-  if (weeks > 0) return `${weeks} أسبوع`;
-  if (days > 0) return `${days} يوم`;
-  if (hours > 0) return `${hours} ساعة`;
-  return 'منذ قليل';
+  if (minutes < 1) return 'الآن';
+  if (minutes < 60) return `منذ ${minutes} دقيقة`;
+  if (hours < 24) return `منذ ${hours} ساعة`;
+  if (days < 7) return `منذ ${days} يوم`;
+  if (weeks < 4) return `منذ ${weeks} أسبوع`;
+  if (months < 12) return `منذ ${months} شهر`;
+
+  const years = Math.floor(days / 365);
+  return `منذ ${years} سنة`;
 };
 
 
@@ -95,7 +98,7 @@ const EditLicenseModal: React.FC<EditLicenseModalProps> = ({ license, employees,
         <div className="modal-header">
           <h2 className="modal-title">
             <FileEdit className="w-6 h-6 text-primary-600" />
-            تعديل الرخصة
+            تعديل الاستئذان
           </h2>
           <button
             onClick={onClose}
@@ -173,15 +176,15 @@ const EditLicenseModal: React.FC<EditLicenseModalProps> = ({ license, employees,
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-secondary-700 mb-2">نوع الرخصة</label>
+              <label className="block text-sm font-medium text-secondary-700 mb-2">نوع الاستئذان</label>
               <select
                 name="license_type"
                 value={formData.license_type || ''}
                 onChange={handleInputChange}
                 className="input-field"
               >
-                <option value="يوم كامل">يوم كامل</option>
-                <option value="نصف يوم">نصف يوم</option>
+                <option value="يوم كامل">إستئذان طويل</option>
+                <option value="نصف يوم">إستئذان قصير</option>
               </select>
             </div>
             {formData.license_type === 'نصف يوم' && (
@@ -198,7 +201,7 @@ const EditLicenseModal: React.FC<EditLicenseModalProps> = ({ license, employees,
             )}
             <div>
               <DatePicker
-                label="تاريخ الرخصة"
+                label="تاريخ الاستئذان"
                 value={formData.license_date || ''}
                 onChange={(date) => setFormData(prev => ({ ...prev, license_date: date }))}
                 placeholder="اختر التاريخ"
@@ -231,6 +234,8 @@ const LicenseList: React.FC = () => {
   const [filters, setFilters] = useState<FilterOptions>({});
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedLicense, setSelectedLicense] = useState<License | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(15);
 
   const employeesWithLicenses = useMemo(() => {
     const licensedEmployeeIds = new Set(licenses.map(l => l.employee_id));
@@ -284,29 +289,33 @@ const LicenseList: React.FC = () => {
         return 99;
       };
 
-      const categoryA = a.employee?.category || '';
-      const categoryB = b.employee?.category || '';
-      const categoryComparison = (CATEGORY_ORDER[categoryA] ?? 99) - (CATEGORY_ORDER[categoryB] ?? 99);
-      if (categoryComparison !== 0) return categoryComparison;
-
-      const rankA = a.employee?.rank || '';
-      const rankB = b.employee?.rank || '';
-      const rankComparison = getRankOrder(rankA, categoryA) - getRankOrder(rankB, categoryB);
-      if (rankComparison !== 0) return rankComparison;
-
-      return new Date(b.license_date).getTime() - new Date(a.license_date).getTime();
+      // Sort by creation date only (most recent first) - this is a chronological record page
+      const createdAtA = a.created_at ? new Date(a.created_at).getTime() : new Date(a.license_date).getTime();
+      const createdAtB = b.created_at ? new Date(b.created_at).getTime() : new Date(b.license_date).getTime();
+      return createdAtB - createdAtA;
     });
   }, [licenses, searchQuery, filters]);
 
+  // Pagination logic
+  const totalPages = Math.ceil(sortedAndFilteredLicenses.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentPageLicenses = sortedAndFilteredLicenses.slice(startIndex, endIndex);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filters]);
+
   const handleDelete = async (id: string) => {
-    if (window.confirm('هل أنت متأكد من حذف هذه الرخصة؟')) {
+    if (window.confirm('هل أنت متأكد من حذف هذا الاستئذان؟')) {
       try {
         await LicenseService.delete(id);
-        setMessage({ text: 'تم حذف الرخصة بنجاح', type: 'success' });
+        setMessage({ text: 'تم حذف الاستئذان بنجاح', type: 'success' });
         loadData();
       } catch (error) {
         console.error('Failed to delete license:', error);
-        setMessage({ text: 'فشل حذف الرخصة', type: 'error' });
+        setMessage({ text: 'فشل حذف الاستئذان', type: 'error' });
       }
     }
   };
@@ -320,13 +329,13 @@ const LicenseList: React.FC = () => {
     if (!selectedLicense) return;
     try {
       await LicenseService.update(String(selectedLicense.id), updatedLicense);
-      setMessage({ text: 'تم تحديث الرخصة بنجاح', type: 'success' });
+      setMessage({ text: 'تم تحديث الاستئذان بنجاح', type: 'success' });
       setShowEditModal(false);
       setSelectedLicense(null);
       loadData(); // Refresh data
     } catch (error) {
       console.error('Failed to update license:', error);
-      setMessage({ text: 'فشل تحديث الرخصة', type: 'error' });
+      setMessage({ text: 'فشل تحديث الاستئذان', type: 'error' });
     }
   };
 
@@ -362,7 +371,7 @@ const LicenseList: React.FC = () => {
     const title = new Paragraph({
       alignment: AlignmentType.CENTER,
       children: [new TextRun({
-        text: "نظام رخص السجل العام",
+        text: "نظام استئذانات السجل العام",
         font: "Sultan bold",
         size: 42, // 21pt
         bold: false,
@@ -394,7 +403,7 @@ const LicenseList: React.FC = () => {
     });
 
     const tableHeader = new TableRow({
-      children: ['م', 'الرتبة', 'اسم الموظف', 'رقم الملف', 'نوع الرخصة', 'تاريخ الرخصة', 'السنة'].map(text => createCell(text, true)),
+      children: ['م', 'الرتبة', 'اسم الموظف', 'رقم الملف', 'نوع الاستئذان', 'تاريخ الاستئذان', 'السنة'].map(text => createCell(text, true)),
       height: { value: 567, rule: HeightRule.EXACT }, // 1cm
     });
 
@@ -443,7 +452,7 @@ const LicenseList: React.FC = () => {
       "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"
     ];
     const currentMonthName = arabicMonths[month];
-    const fileName = `نظام رخص السجل العام - ${currentMonthName} - ${year}.docx`;
+    const fileName = `نظام استئذانات السجل العام - ${currentMonthName} - ${year}.docx`;
     Packer.toBlob(doc).then(blob => {
       saveAs(blob, fileName);
     }).catch(err => {
@@ -465,7 +474,7 @@ const LicenseList: React.FC = () => {
       doc.setFont('Sultan-bold');
       doc.setR2L(true);
 
-      const head = [['التاريخ', 'نوع الرخصة', 'رقم الملف', 'الاسم', 'الرتبة', 'م']];
+      const head = [['التاريخ', 'نوع الاستئذان', 'رقم الملف', 'الاسم', 'الرتبة', 'م']];
       const body = sortedAndFilteredLicenses.map((license, index) => [
         formatDate(license.license_date),
         license.license_type,
@@ -478,7 +487,7 @@ const LicenseList: React.FC = () => {
       ]);
 
       doc.setFontSize(18);
-      doc.text('كشف الرخص', doc.internal.pageSize.getWidth() / 2, 40, { align: 'center' });
+      doc.text('كشف الاستئذانات', doc.internal.pageSize.getWidth() / 2, 40, { align: 'center' });
 
       (doc as any).autoTable({
         head,
@@ -510,7 +519,7 @@ const LicenseList: React.FC = () => {
       return;
     }
     let csvContent = "\uFEFF"; // BOM for UTF-8
-    csvContent += "م,الرتبة,اسم الموظف,رقم الملف,نوع الرخصة,تاريخ الرخصة,الساعات,الشهر,السنة\r\n";
+    csvContent += "م,الرتبة,اسم الموظف,رقم الملف,نوع الاستئذان,تاريخ الاستئذان,الساعات,الشهر,السنة\r\n";
     sortedAndFilteredLicenses.forEach((license, index) => {
       const row = [
         index + 1,
@@ -619,7 +628,7 @@ const LicenseList: React.FC = () => {
               </div>
               <div>
                 <h3 className="text-base font-semibold text-gray-800">خيارات الفلترة</h3>
-                <p className="text-xs text-gray-600">اختر الموظف ونوع الرخصة والتاريخ</p>
+                <p className="text-xs text-gray-600">اختر الموظف ونوع الاستئذان والتاريخ</p>
               </div>
             </div>
 
@@ -642,7 +651,7 @@ const LicenseList: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">نوع الرخصة</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">نوع الاستئذان</label>
                 <select
                   value={filters.license_type || ''}
                   onChange={(e) => setFilters(prev => ({ ...prev, license_type: e.target.value }))}
@@ -706,14 +715,17 @@ const LicenseList: React.FC = () => {
                   <FileText className="w-7 h-7 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-white">قائمة الرخص</h2>
-                  <p className="text-blue-100 text-sm mt-1">إجمالي {sortedAndFilteredLicenses.length} رخصة من أصل {licenses.length}</p>
+                  <h2 className="text-2xl font-bold text-white">سجلات الاستئذانات</h2>
+                  <p className="text-blue-100 text-sm mt-1">
+                    عرض {startIndex + 1}-{Math.min(endIndex, sortedAndFilteredLicenses.length)} من أصل {sortedAndFilteredLicenses.length} سجل
+                    {totalPages > 1 && ` (صفحة ${currentPage} من ${totalPages})`}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 <div className="bg-white/20 px-4 py-2 rounded-xl">
-                  <span className="text-white font-bold text-lg">{sortedAndFilteredLicenses.length}</span>
-                  <span className="text-blue-100 text-sm mr-1">رخصة</span>
+                  <span className="text-white font-bold text-lg">{currentPageLicenses.length}</span>
+                  <span className="text-blue-100 text-sm mr-1">في هذه الصفحة</span>
                 </div>
                 <button
                   onClick={exportToPDF}
@@ -759,30 +771,28 @@ const LicenseList: React.FC = () => {
                     <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">الرتبة</th>
                     <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">اسم الموظف</th>
                     <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">رقم الملف</th>
-                    <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">نوع الرخصة</th>
-                    <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">تاريخ الرخصة</th>
+                    <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">نوع الاستئذان</th>
+                    <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">تاريخ الاستئذان</th>
                     <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">الساعات</th>
                     <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">سُجلت منذ</th>
                     <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 border-b-2 border-gray-200">الإجراءات</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {sortedAndFilteredLicenses.length > 0 ? (
-                    sortedAndFilteredLicenses.map((license, index) => (
+                  {currentPageLicenses.length > 0 ? (
+                    currentPageLicenses.map((license, index) => (
                       <tr key={license.id} className="hover:bg-blue-50 transition-colors duration-200 group">
                         <td className="px-6 py-4 text-sm text-gray-900">
                           <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center font-bold text-blue-600 group-hover:bg-blue-200">
-                            {index + 1}
+                            {startIndex + index + 1}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm font-medium text-gray-700">
-                          <span className="bg-gray-100 px-3 py-1 rounded-full text-xs font-semibold group-hover:bg-gray-200">
-                            {license.employee?.category === 'ضابط' || license.employee?.category === 'ضابط صف'
-                              ? license.employee?.rank
-                              : license.employee?.category}
-                          </span>
+                        <td className="px-6 py-4 text-sm text-gray-700">
+                          {license.employee?.category === 'ضابط' || license.employee?.category === 'ضابط صف'
+                            ? license.employee?.rank
+                            : license.employee?.category}
                         </td>
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{license.employee?.full_name}</td>
+                        <td className="px-6 py-4 text-sm font-bold text-gray-900">{license.employee?.full_name}</td>
                         <td className="px-6 py-4 text-sm text-gray-700">{license.employee?.file_number}</td>
                         <td className="px-6 py-4 text-sm">
                           <span className={`px-4 py-2 rounded-full text-xs font-bold shadow-sm ${
@@ -790,7 +800,7 @@ const LicenseList: React.FC = () => {
                               ? 'bg-green-100 text-green-800 border border-green-200'
                               : 'bg-orange-100 text-orange-800 border border-orange-200'
                           }`}>
-                            {license.license_type}
+                            {license.license_type === 'يوم كامل' ? 'إستئذان طويل' : 'إستئذان قصير'}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-700 font-medium">{formatDate(license.license_date)}</td>
@@ -800,12 +810,12 @@ const LicenseList: React.FC = () => {
                               {license.hours} ساعات
                             </span>
                           ) : (
-                            <span className="text-gray-400 font-medium">يوم كامل</span>
+                            <span className="text-gray-400 font-medium">إستئذان طويل</span>
                           )}
                         </td>
                         <td className="px-6 py-4 text-sm">
                           <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-medium">
-                            {getTimeSince(license.license_date)}
+                            {getTimeSince(license.created_at || license.license_date)}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-center">
@@ -813,14 +823,14 @@ const LicenseList: React.FC = () => {
                             <button
                               onClick={() => handleEdit(license)}
                               className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all duration-200 group/btn"
-                              title="تعديل الرخصة"
+                              title="تعديل الاستئذان"
                             >
                               <Edit className="w-4 h-4 group-hover/btn:scale-110 transition-transform duration-200" />
                             </button>
                             <button
                               onClick={() => handleDelete(String(license.id))}
                               className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-all duration-200 group/btn"
-                              title="حذف الرخصة"
+                              title="حذف الاستئذان"
                             >
                               <Trash2 className="w-4 h-4 group-hover/btn:scale-110 transition-transform duration-200" />
                             </button>
@@ -835,8 +845,8 @@ const LicenseList: React.FC = () => {
                           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
                             <FileText className="w-8 h-8 text-gray-400" />
                           </div>
-                          <h3 className="text-lg font-semibold text-gray-700 mb-2">لا توجد رخص</h3>
-                          <p className="text-gray-500 mb-4">لم يتم العثور على أي رخص تطابق معايير البحث</p>
+                          <h3 className="text-lg font-semibold text-gray-700 mb-2">لا توجد استئذانات</h3>
+                          <p className="text-gray-500 mb-4">لم يتم العثور على أي استئذانات تطابق معايير البحث</p>
                           <div className="flex gap-3">
                             <button
                               onClick={clearFilters}
@@ -860,6 +870,75 @@ const LicenseList: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mt-6">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-700">
+                عرض {startIndex + 1} إلى {Math.min(endIndex, sortedAndFilteredLicenses.length)} من أصل {sortedAndFilteredLicenses.length} سجل
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Previous Button */}
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                    currentPage === 1
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-500 text-white hover:bg-blue-600'
+                  }`}
+                >
+                  السابق
+                </button>
+
+                {/* Page Numbers */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`w-10 h-10 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                          currentPage === pageNum
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Next Button */}
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                    currentPage === totalPages
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-500 text-white hover:bg-blue-600'
+                  }`}
+                >
+                  التالي
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       {showEditModal && (
         <EditLicenseModal

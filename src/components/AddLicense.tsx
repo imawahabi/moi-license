@@ -208,15 +208,15 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
   const steps: LicenseStep[] = [
     {
       id: 1,
-      title: 'اختيار الموظف وتفاصيل الرخصة',
-      description: 'حدد الموظف والتاريخ ونوع الرخصة',
+      title: 'اختيار الموظف وتفاصيل الاستئذان',
+      description: 'حدد الموظف والتاريخ ونوع الاستئذان',
       icon: <Users className="w-5 h-5" />,
       completed: !!(licenseConfig.selectedEmployee && licenseConfig.licenseDate && (licenseConfig.licenseType === 'يوم كامل' || (licenseConfig.licenseType === 'نصف يوم' && licenseConfig.hours && licenseConfig.hours > 0)))
     },
     {
       id: 2,
       title: 'المراجعة والحفظ',
-      description: 'راجع البيانات واحفظ الرخصة',
+      description: 'راجع البيانات واحفظ الاستئذان',
       icon: <CheckCircle className="w-5 h-5" />,
       completed: false
     }
@@ -400,8 +400,8 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
             </div>
 
           </div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">إضافة رخصة جديدة</h1>
-          <p className="text-gray-600">نظام بسيط وسريع لإضافة رخصة لموظف واحد</p>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">إضافة استئذان جديد</h1>
+          <p className="text-gray-600">نظام بسيط وسريع لإضافة استئذان لموظف واحد</p>
         </div>
 
         {message && (
@@ -576,7 +576,7 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
 
                     {/* License Type Selection */}
                     <div className="space-y-4">
-                      <label className="block text-sm font-semibold text-gray-700">نوع الرخصة *</label>
+                      <label className="block text-sm font-semibold text-gray-700">نوع الاستئذان *</label>
                       <div className="grid grid-cols-2 gap-4">
                         <div
                           onClick={() => setLicenseConfig(prev => ({ ...prev, licenseType: 'يوم كامل', hours: undefined }))}
@@ -592,8 +592,8 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                             }`}>
                               <Calendar className="w-4 h-4 text-white" />
                             </div>
-                            <div className="font-bold text-gray-800">يوم كامل</div>
-                            <div className="text-xs text-gray-600 mt-1">8 ساعات</div>
+                            <div className="font-bold text-gray-800">إستئذان طويل</div>
+                            <div className="text-xs text-gray-600 mt-1">يوم كامل</div>
                           </div>
                         </div>
                         <div
@@ -610,7 +610,7 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                             }`}>
                               <Calendar className="w-4 h-4 text-white" />
                             </div>
-                            <div className="font-bold text-gray-800">نصف يوم</div>
+                            <div className="font-bold text-gray-800">إستئذان قصير</div>
                             <div className="text-xs text-gray-600 mt-1">ساعات محددة</div>
                           </div>
                         </div>
@@ -646,26 +646,7 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                             <p className="text-sm">الموظف {licenseConfig.selectedEmployee?.full_name} لديه رخصة مسجلة مسبقاً في هذا التاريخ</p>
                           </div>
                         </div>
-                        <div className="bg-white rounded-lg p-4 border border-red-200">
-                          <p className="text-red-700 font-medium mb-3">تفاصيل الرخصة الموجودة في تاريخ {licenseConfig.licenseDate?.toLocaleDateString('ar-US', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                          })}:</p>
-                          <div className="space-y-2">
-                            {duplicateWarning.map((license, index) => (
-                              <div key={index} className="flex items-center gap-3 text-red-700 bg-red-50 p-3 rounded-lg border border-red-200">
-                                <X className="w-5 h-5" />
-                                <div className="flex-1">
-                                  <div className="font-bold">{license.employee?.full_name}</div>
-                                  <div className="text-sm">نوع الرخصة: {license.license_type}</div>
-                                  {license.hours && <div className="text-sm">عدد الساعات: {license.hours}</div>}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
+      </div>
                     )}
 
                     {/* Monthly Limits Warning */}
@@ -690,30 +671,6 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                             ))}
                           </div>
                         </div>
-
-                        {/* Current month stats */}
-                        {calculateEmployeeMonthlyStats && (
-                          <div className="mt-4 bg-white rounded-lg p-4 border border-yellow-200">
-                            <h4 className="font-semibold text-yellow-800 mb-3">إحصائيات الشهر الحالي للموظف:</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                              <div className="text-center">
-                                <div className="font-bold text-lg text-gray-800">{calculateEmployeeMonthlyStats.fullDayLicenses}</div>
-                                <div className="text-gray-600">استئذانات طويلة</div>
-                                <div className="text-xs text-green-600">متبقي: {calculateEmployeeMonthlyStats.remainingFullDays}</div>
-                              </div>
-                              <div className="text-center">
-                                <div className="font-bold text-lg text-gray-800">{calculateEmployeeMonthlyStats.shortLicenses}</div>
-                                <div className="text-gray-600">استئذانات قصيرة</div>
-                                <div className="text-xs text-green-600">متبقي: {calculateEmployeeMonthlyStats.remainingShortLicenses}</div>
-                              </div>
-                              <div className="text-center">
-                                <div className="font-bold text-lg text-gray-800">{calculateEmployeeMonthlyStats.totalHours}</div>
-                                <div className="text-gray-600">إجمالي الساعات</div>
-                                <div className="text-xs text-green-600">متبقي: {calculateEmployeeMonthlyStats.remainingHours} ساعة</div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>
@@ -729,7 +686,7 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                   <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl mb-4 shadow-lg">
                     <CheckCircle className="w-8 h-8 text-white" />
                   </div>
-                  <h3 className="text-2xl font-bold text-gray-800 mb-2">مراجعة الرخصة النهائية</h3>
+                  <h3 className="text-2xl font-bold text-gray-800 mb-2">مراجعة الاستئذان النهائية</h3>
                   <p className="text-gray-500">تأكد من صحة البيانات قبل الحفظ</p>
                 </div>
 
@@ -752,8 +709,10 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                   {/* License Details */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-white p-4 rounded-xl border border-gray-200">
-                      <div className="text-sm text-gray-500 mb-1">نوع الرخصة</div>
-                      <div className="font-bold text-gray-800 text-lg">{licenseConfig.licenseType}</div>
+                      <div className="text-sm text-gray-500 mb-1">نوع الاستئذان</div>
+                      <div className="font-bold text-gray-800 text-lg">
+                        {licenseConfig.licenseType === 'يوم كامل' ? 'إستئذان طويل' : 'إستئذان قصير'}
+                      </div>
                     </div>
 
                     <div className="bg-white p-4 rounded-xl border border-gray-200">
@@ -888,7 +847,7 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                     ) : (
                       <>
                         <CheckCircle className="w-5 h-5" />
-                        حفظ الرخصة
+                        حفظ الاستئذان
                       </>
                     )}
                   </button>

@@ -268,7 +268,12 @@ app.get('/api/licenses', async (req, res) => {
         file_number: employee?.file_number || '',
         category: employee?.category || ''
       };
-    }).sort((a, b) => new Date(b.license_date) - new Date(a.license_date));
+    }).sort((a, b) => {
+      // Sort by created_at first (most recent first), then by license_date
+      const createdAtA = new Date(a.created_at || a.license_date);
+      const createdAtB = new Date(b.created_at || b.license_date);
+      return createdAtB - createdAtA;
+    });
     
     res.json(licensesWithEmployees);
   } catch (error) {
@@ -296,7 +301,12 @@ app.get('/api/licenses/employee/:employeeId', async (req, res) => {
         file_number: employee.file_number,
         category: employee.category
       }))
-      .sort((a, b) => new Date(b.license_date) - new Date(a.license_date));
+      .sort((a, b) => {
+        // Sort by created_at first (most recent first), then by license_date
+        const createdAtA = new Date(a.created_at || a.license_date);
+        const createdAtB = new Date(b.created_at || b.license_date);
+        return createdAtB - createdAtA;
+      });
     
     res.json(employeeLicenses);
   } catch (error) {

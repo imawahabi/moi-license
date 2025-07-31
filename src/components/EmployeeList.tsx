@@ -142,7 +142,7 @@ const EmployeeList: React.FC = () => {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-fade-in">
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden hover:shadow-2xl transition-all duration-500">
         <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-8 py-6">
           <div className="flex items-center justify-between">
@@ -227,14 +227,12 @@ const EmployeeList: React.FC = () => {
                       {index + 1}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-700">
-                    <span className="bg-gray-100 px-3 py-1 rounded-full text-xs font-semibold group-hover:bg-gray-200">
-                      {employee.category === 'ضابط' || employee.category === 'ضابط صف'
-                        ? employee.rank
-                        : employee.category}
-                    </span>
+                  <td className="px-6 py-4 text-sm text-gray-700">
+                    {employee.category === 'ضابط' || employee.category === 'ضابط صف'
+                      ? employee.rank
+                      : employee.category}
                   </td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{employee.full_name}</td>
+                  <td className="px-6 py-4 text-sm font-bold text-gray-900">{employee.full_name}</td>
                   <td className="px-6 py-4 text-sm text-gray-700">{employee.file_number}</td>
                   <td className="px-6 py-4 text-sm">
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${

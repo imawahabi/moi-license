@@ -6,13 +6,14 @@ import { Search, FileText, Printer, Calendar, Users, Eye, X, AlertTriangle, Chec
 
 import { LicenseService } from '../services/licenseService';
 import { Employee, License } from '../types';
-import { CATEGORY_ORDER } from '../utils/sorting';
+import { CATEGORY_ORDER, OFFICER_RANK_ORDER, NCO_RANK_ORDER } from '../utils/sorting';
 
 // Constants for monthly limits
 const MONTHLY_LIMITS = {
-  FULL_DAY_LICENSES: 3,
-  SHORT_LICENSES: 4,
-  MAX_HOURS_PER_MONTH: 12
+  FULL_DAY_LICENSES: 3, // حد الاستئذانات الطويلة: 3 مرات شهرياً (لا تُحتسب بالساعات)
+  SHORT_LICENSES: 4, // حد الاستئذانات القصيرة: 4 مرات شهرياً
+  MAX_SHORT_HOURS_PER_MONTH: 12, // حد ساعات الاستئذانات القصيرة فقط: 12 ساعة شهرياً
+  HOURS_PER_SHORT_LICENSE: 3 // معدل 3 ساعات لكل استئذان قصير
 };
 
 // تاريخ بداية تطبيق الحدود الشهرية - أول يوم في الشهر الحالي
@@ -46,14 +47,71 @@ interface MonthlyEmployeeStats {
   employee: Employee;
   fullDayLicenses: number;
   shortLicenses: number;
-  totalHours: number;
+  totalHours: number; // ساعات الاستئذانات القصيرة فقط
   remainingFullDays: number;
   remainingShortLicenses: number;
-  remainingHours: number;
-  isOverLimit: boolean;
-  isAtLimit: boolean;
-  warnings: string[];
+  remainingShortHours: number; // الساعات المتبقية للاستئذانات القصيرة
+  fullDayStatus: 'safe' | 'warning' | 'danger'; // حالة الاستئذانات الطويلة
+  shortLicensesStatus: 'safe' | 'warning' | 'danger'; // حالة الاستئذانات القصيرة (عدد + ساعات)
+  overallStatus: 'safe' | 'warning' | 'danger'; // الحالة العامة
 }
+
+// مكون الدائرة التقدمية
+const ProgressCircle: React.FC<{
+  current: number;
+  max: number;
+  status: 'safe' | 'warning' | 'danger';
+  size?: number;
+}> = ({ current, max, status, size = 48 }) => {
+  const percentage = Math.min((current / max) * 100, 100);
+  const circumference = 2 * Math.PI * 16; // نصف قطر 16
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+  const colors = {
+    safe: '#10b981', // أخضر
+    warning: '#f59e0b', // أصفر
+    danger: '#ef4444' // أحمر
+  };
+
+  return (
+    <div className="relative inline-flex items-center justify-center">
+      <svg width={size} height={size} className="transform -rotate-90">
+        {/* الدائرة الخلفية */}
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r="16"
+          stroke="#e5e7eb"
+          strokeWidth="3"
+          fill="transparent"
+        />
+        {/* دائرة التقدم */}
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r="16"
+          stroke={colors[status]}
+          strokeWidth="3"
+          fill="transparent"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          className="transition-all duration-300"
+        />
+      </svg>
+      {/* الرقم في المنتصف */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className={`text-sm font-bold ${
+          status === 'safe' ? 'text-green-700' :
+          status === 'warning' ? 'text-yellow-700' :
+          'text-red-700'
+        }`}>
+          {current}
+        </span>
+      </div>
+    </div>
+  );
+};
 
 const customSelectStyles = {
   control: (provided: any) => ({
@@ -169,48 +227,58 @@ const Reports: React.FC = () => {
         const licenseDate = new Date(license.license_date);
         const isAfterLimitsStart = licenseDate >= MONTHLY_LIMITS_START_DATE;
 
-        // تصحيح المنطق: الاستئذان القصير هو "نصف يوم" وليس بناءً على الساعات
-        if (license.license_type === 'نصف يوم') {
-          if (isAfterLimitsStart) {
+        if (isAfterLimitsStart) {
+          // الاستئذان القصير: يُحتسب بالعدد والساعات
+          if (license.license_type === 'نصف يوم') {
             shortLicenses++;
+            totalHours += MONTHLY_LIMITS.HOURS_PER_SHORT_LICENSE; // 3 ساعات لكل استئذان قصير
           }
-          totalHours += license.hours || 4; // افتراض 4 ساعات لنصف يوم
-        } else if (license.license_type === 'يوم كامل') {
-          if (isAfterLimitsStart) {
+          // الاستئذان الطويل: يُحتسب بالعدد فقط (لا يُحتسب بالساعات)
+          else if (license.license_type === 'يوم كامل') {
             fullDayLicenses++;
+            // لا نضيف ساعات للاستئذان الطويل - هذا هو التصحيح المطلوب
           }
-          totalHours += 8; // 8 ساعات ليوم كامل
         }
       });
 
       const remainingFullDays = Math.max(0, MONTHLY_LIMITS.FULL_DAY_LICENSES - fullDayLicenses);
       const remainingShortLicenses = Math.max(0, MONTHLY_LIMITS.SHORT_LICENSES - shortLicenses);
-      const remainingHours = Math.max(0, MONTHLY_LIMITS.MAX_HOURS_PER_MONTH - totalHours);
+      const remainingShortHours = Math.max(0, MONTHLY_LIMITS.MAX_SHORT_HOURS_PER_MONTH - totalHours);
 
-      const warnings: string[] = [];
-      let isOverLimit = false;
-      let isAtLimit = false;
+      // تحديث المنطق حسب المتطلبات الجديدة
+      let fullDayStatus: 'safe' | 'warning' | 'danger' = 'safe';
+      let shortLicensesStatus: 'safe' | 'warning' | 'danger' = 'safe';
 
+      // حالة الاستئذانات الطويلة
       if (fullDayLicenses > MONTHLY_LIMITS.FULL_DAY_LICENSES) {
-        warnings.push(`تجاوز حد الاستئذانات الطويلة (${fullDayLicenses}/${MONTHLY_LIMITS.FULL_DAY_LICENSES})`);
-        isOverLimit = true;
+        fullDayStatus = 'danger'; // تحذير: تجاوز اليوم الكامل
       } else if (fullDayLicenses === MONTHLY_LIMITS.FULL_DAY_LICENSES) {
-        isAtLimit = true;
+        fullDayStatus = 'danger'; // تحذير: استنفاذ اليوم الكامل
+      } else if (remainingFullDays === 1) {
+        fullDayStatus = 'warning'; // تنبيه: تبقى رخصة واحدة
+      } else {
+        fullDayStatus = 'safe'; // ضمن حد اليوم الكامل
       }
 
-      if (shortLicenses > MONTHLY_LIMITS.SHORT_LICENSES) {
-        warnings.push(`تجاوز حد الاستئذانات القصيرة (${shortLicenses}/${MONTHLY_LIMITS.SHORT_LICENSES})`);
-        isOverLimit = true;
-      } else if (shortLicenses === MONTHLY_LIMITS.SHORT_LICENSES) {
-        isAtLimit = true;
+      // حالة الاستئذانات القصيرة (دمج منطق العدد والساعات)
+      const shortLicensesExceeded = shortLicenses > MONTHLY_LIMITS.SHORT_LICENSES;
+      const shortLicensesExhausted = shortLicenses === MONTHLY_LIMITS.SHORT_LICENSES;
+      const shortHoursExceeded = totalHours > MONTHLY_LIMITS.MAX_SHORT_HOURS_PER_MONTH;
+      const shortHoursExhausted = totalHours === MONTHLY_LIMITS.MAX_SHORT_HOURS_PER_MONTH;
+
+      if (shortLicensesExceeded || shortHoursExceeded) {
+        shortLicensesStatus = 'danger'; // تحذير: تجاوز الاستئذانات القصيرة
+      } else if (shortLicensesExhausted || shortHoursExhausted) {
+        shortLicensesStatus = 'danger'; // تحذير: استنفاذ الاستئذانات القصيرة
+      } else if (remainingShortLicenses === 1 || remainingShortHours <= 3) {
+        shortLicensesStatus = 'warning'; // تنبيه: اقتراب من الاستنفاذ
+      } else {
+        shortLicensesStatus = 'safe'; // ضمن حد الاستئذانات القصيرة
       }
 
-      if (totalHours > MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) {
-        warnings.push(`تجاوز حد الساعات الشهرية (${totalHours}/${MONTHLY_LIMITS.MAX_HOURS_PER_MONTH})`);
-        isOverLimit = true;
-      } else if (totalHours === MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) {
-        isAtLimit = true;
-      }
+      // تحديد الحالة العامة
+      const overallStatus = fullDayStatus === 'danger' || shortLicensesStatus === 'danger' ? 'danger' :
+                           fullDayStatus === 'warning' || shortLicensesStatus === 'warning' ? 'warning' : 'safe';
 
       // Only include employees who have licenses this month
       if (employeeLicenses.length > 0) {
@@ -221,16 +289,16 @@ const Reports: React.FC = () => {
           totalHours,
           remainingFullDays,
           remainingShortLicenses,
-          remainingHours,
-          isOverLimit,
-          isAtLimit,
-          warnings
+          remainingShortHours,
+          fullDayStatus,
+          shortLicensesStatus,
+          overallStatus
         });
       }
     });
 
     return stats.sort((a, b) => {
-      // Sort by category first, then by name
+      // Sort by category first
       const categoryA = CATEGORY_ORDER[a.employee.category] ?? 99;
       const categoryB = CATEGORY_ORDER[b.employee.category] ?? 99;
 
@@ -238,6 +306,20 @@ const Reports: React.FC = () => {
         return categoryA - categoryB;
       }
 
+      // Sort by military rank within each category
+      if (a.employee.category === 'ضابط') {
+        const rankA = OFFICER_RANK_ORDER[a.employee.rank.replace(' حقوقي', '').trim()] || 99;
+        const rankB = OFFICER_RANK_ORDER[b.employee.rank.replace(' حقوقي', '').trim()] || 99;
+        if (rankA !== rankB) return rankA - rankB;
+      }
+
+      if (a.employee.category === 'ضابط صف') {
+        const rankA = NCO_RANK_ORDER[a.employee.rank] || 99;
+        const rankB = NCO_RANK_ORDER[b.employee.rank] || 99;
+        if (rankA !== rankB) return rankA - rankB;
+      }
+
+      // Finally sort by name
       return a.employee.full_name.localeCompare(b.employee.full_name, 'ar');
     });
   }, [licenses]);
@@ -329,14 +411,15 @@ const Reports: React.FC = () => {
 
       if (license.license_type === 'يوم كامل') {
         data.fullDays += 1;
-        data.totalHours += 8;
+        // الاستئذانات الطويلة لا تُحتسب بالساعات
       } else if (license.license_type === 'نصف يوم') {
         data.halfDays += 1;
-        data.totalHours += 4;
+        data.totalHours += MONTHLY_LIMITS.HOURS_PER_SHORT_LICENSE; // 3 ساعات لكل استئذان قصير
       }
     });
 
     return Array.from(employeeMap.values()).sort((a, b) => {
+      // Sort by category first
       const aCategoryOrder = CATEGORY_ORDER[a.employee.category] || 99;
       const bCategoryOrder = CATEGORY_ORDER[b.employee.category] || 99;
 
@@ -344,6 +427,20 @@ const Reports: React.FC = () => {
         return aCategoryOrder - bCategoryOrder;
       }
 
+      // Sort by military rank within each category
+      if (a.employee.category === 'ضابط') {
+        const rankA = OFFICER_RANK_ORDER[a.employee.rank.replace(' حقوقي', '').trim()] || 99;
+        const rankB = OFFICER_RANK_ORDER[b.employee.rank.replace(' حقوقي', '').trim()] || 99;
+        if (rankA !== rankB) return rankA - rankB;
+      }
+
+      if (a.employee.category === 'ضابط صف') {
+        const rankA = NCO_RANK_ORDER[a.employee.rank] || 99;
+        const rankB = NCO_RANK_ORDER[b.employee.rank] || 99;
+        if (rankA !== rankB) return rankA - rankB;
+      }
+
+      // Finally sort by name
       return a.employee.full_name.localeCompare(b.employee.full_name, 'ar');
     });
   }, [filteredLicenses]);
@@ -356,9 +453,31 @@ const Reports: React.FC = () => {
         employeeMap.set(license.employee.id, license.employee);
       }
     });
-    return Array.from(employeeMap.values()).sort((a: Employee, b: Employee) =>
-      a.full_name.localeCompare(b.full_name, 'ar')
-    );
+    return Array.from(employeeMap.values()).sort((a: Employee, b: Employee) => {
+      // Sort by category first
+      const categoryA = CATEGORY_ORDER[a.category] || 99;
+      const categoryB = CATEGORY_ORDER[b.category] || 99;
+
+      if (categoryA !== categoryB) {
+        return categoryA - categoryB;
+      }
+
+      // Sort by military rank within each category
+      if (a.category === 'ضابط') {
+        const rankA = OFFICER_RANK_ORDER[a.rank.replace(' حقوقي', '').trim()] || 99;
+        const rankB = OFFICER_RANK_ORDER[b.rank.replace(' حقوقي', '').trim()] || 99;
+        if (rankA !== rankB) return rankA - rankB;
+      }
+
+      if (a.category === 'ضابط صف') {
+        const rankA = NCO_RANK_ORDER[a.rank] || 99;
+        const rankB = NCO_RANK_ORDER[b.rank] || 99;
+        if (rankA !== rankB) return rankA - rankB;
+      }
+
+      // Finally sort by name
+      return a.full_name.localeCompare(b.full_name, 'ar');
+    });
   }, [licenses]);
 
   // Get unique years and months
@@ -623,18 +742,13 @@ const Reports: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen p-6">
       <div className="mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 mb-6">
-          <div className="px-8 py-6">
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">التقارير الشاملة</h1>
-            <p className="text-gray-600">إدارة ومتابعة تقارير الاستئذانات والحدود الشهرية</p>
-          </div>
-
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 mb-6 m-auto">
           {/* Tabs */}
-          <div className="px-8 py-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="px-6 py-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div
                 onClick={() => setActiveTab('monthly-limits')}
                 className={`cursor-pointer p-6 rounded-2xl border-2 transition-all duration-300 ${
@@ -660,14 +774,22 @@ const Reports: React.FC = () => {
                     <p className="text-gray-600 mt-1">
                       متابعة حدود الاستئذانات الشهرية للموظفين
                     </p>
-                    <div className="flex gap-2 mt-3">
+                    <div className="flex gap-2 mt-3 flex-wrap">
                       <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-semibold flex items-center gap-1">
                         <Users className="w-3 h-3" />
                         {calculateMonthlyStats.length} موظف
                       </span>
                       <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-semibold flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3" />
-                        {calculateMonthlyStats.filter(s => s.isOverLimit).length} تجاوز
+                        {calculateMonthlyStats.filter(s => s.overallStatus === 'danger').length} تحذير
+                      </span>
+                      <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-semibold flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {calculateMonthlyStats.filter(s => s.overallStatus === 'warning').length} تنبيه
+                      </span>
+                      <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-semibold flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" />
+                        {calculateMonthlyStats.filter(s => s.overallStatus === 'safe').length} آمن
                       </span>
                     </div>
                   </div>
@@ -738,7 +860,7 @@ const Reports: React.FC = () => {
                         حد الاستئذانات القصيرة: {MONTHLY_LIMITS.SHORT_LICENSES}
                       </span>
                       <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded">
-                        حد الساعات الشهرية: {MONTHLY_LIMITS.MAX_HOURS_PER_MONTH}
+                        حد ساعات الاستئذانات القصيرة: {MONTHLY_LIMITS.MAX_SHORT_HOURS_PER_MONTH}
                       </span>
                     </div>
                   </div>
@@ -769,87 +891,19 @@ const Reports: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Quick Stats */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                    {(() => {
-                      const filteredStats = calculateMonthlyStats.filter(stat => {
-                        if (!searchTerm) return true;
-                        const searchLower = searchTerm.toLowerCase();
-                        return (
-                          stat.employee.full_name.toLowerCase().includes(searchLower) ||
-                          stat.employee.rank.toLowerCase().includes(searchLower) ||
-                          stat.employee.category.toLowerCase().includes(searchLower)
-                        );
-                      });
 
-                      return (
-                        <>
-                          <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
-                            <div className="text-2xl font-bold text-blue-600">
-                              {filteredStats.filter(s => s.isOverLimit).length}
-                            </div>
-                            <div className="text-sm text-blue-700">موظفين تجاوزوا الحد</div>
-                          </div>
-                          <div className="bg-green-50 rounded-xl p-4 border border-green-200">
-                            <div className="text-2xl font-bold text-green-600">
-                              {filteredStats.filter(s => !s.isOverLimit && !s.isAtLimit).length}
-                            </div>
-                            <div className="text-sm text-green-700">موظفين ضمن الحد</div>
-                          </div>
-                          <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
-                            <div className="text-2xl font-bold text-yellow-600">
-                              {filteredStats.filter(s => s.isAtLimit && !s.isOverLimit).length}
-                            </div>
-                            <div className="text-sm text-yellow-700">موظفين وصلوا للحد</div>
-                          </div>
-                          <div className="bg-purple-50 rounded-xl p-4 border border-purple-200">
-                            <div className="text-2xl font-bold text-purple-600">
-                              {filteredStats.length}
-                            </div>
-                            <div className="text-sm text-purple-700">
-                              {searchTerm ? 'نتائج البحث' : 'إجمالي الموظفين'}
-                            </div>
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
 
                   <div className="overflow-x-auto">
-                    <table className="w-full border-collapse">
+                    <table className="w-full border-collapse border-4 border-gray-100">
                       <thead>
-                        <tr className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
-                          <th className="text-right py-5 px-4 font-bold text-gray-800 border-r border-blue-200">الرتبة/الفئة</th>
-                          <th className="text-right py-5 px-4 font-bold text-gray-800 border-r border-blue-200">الاسم</th>
-                          <th className="text-center py-5 px-4 font-bold text-gray-800 border-r border-blue-200 min-w-32">
-                            <div className="flex flex-col items-center gap-1">
-                              <Clock className="w-5 h-5 text-blue-600" />
-                              <span>ساعات الاستئذانات</span>
-                              <span className="text-xs text-blue-600">القصيرة</span>
-                            </div>
-                          </th>
-                          <th className="text-center py-5 px-4 font-bold text-gray-800 border-r border-blue-200 min-w-32">
-                            <div className="flex flex-col items-center gap-1">
-                              <div className="w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center">
-                                <span className="text-white text-xs font-bold">½</span>
-                              </div>
-                              <span>استئذانات قصيرة</span>
-                            </div>
-                          </th>
-                          <th className="text-center py-5 px-4 font-bold text-gray-800 border-r border-blue-200 min-w-32">
-                            <div className="flex flex-col items-center gap-1">
-                              <div className="w-5 h-5 bg-purple-500 rounded-full flex items-center justify-center">
-                                <span className="text-white text-xs font-bold">1</span>
-                              </div>
-                              <span>استئذانات طويلة</span>
-                            </div>
-                          </th>
-                          <th className="text-center py-5 px-4 font-bold text-gray-800 min-w-40">
-                            <div className="flex flex-col items-center gap-1">
-                              <CheckCircle className="w-5 h-5 text-green-600" />
-                              <span>الحالة</span>
-                            </div>
-                          </th>
+                        <tr className="bg-gray-50 border-b border-gray-200">
+                          <th className="text-center py-3 px-3 font-semibold text-gray-700 text-sm">م</th>
+                          <th className="text-center py-3 px-3 font-semibold text-gray-700 text-sm">الرتبة</th>
+                          <th className="text-right py-3 px-4 font-semibold text-gray-700 text-sm">الاسم</th>
+                          <th className="text-center py-3 px-3 font-semibold text-gray-700 text-sm">استئذانات طويلة</th>
+                          <th className="text-center py-3 px-3 font-semibold text-gray-700 text-sm">استئذانات قصيرة</th>
+                          <th className="text-center py-3 px-3 font-semibold text-gray-700 text-sm">ساعات الاستئذانات القصيرة</th>
+                          <th className="text-center py-3 px-4 font-semibold text-gray-700 text-sm">الحالة</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
@@ -863,181 +917,82 @@ const Reports: React.FC = () => {
                               stat.employee.category.toLowerCase().includes(searchLower)
                             );
                           })
-                          .map((stat, index) => (
-                          <tr key={stat.employee.id} className={`hover:bg-blue-50 transition-colors duration-200 ${
-                            index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                          } ${stat.isOverLimit ? 'border-l-4 border-red-500' : stat.isAtLimit ? 'border-l-4 border-yellow-500' : 'border-l-4 border-green-500'}`}>
-                            <td className="py-6 px-4 border-r border-gray-100">
-                              <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center font-bold text-blue-600 text-sm">
-                                  {index + 1}
-                                </div>
-                                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                  stat.employee.category === 'ضابط' ? 'bg-blue-100 text-blue-800' :
-                                  stat.employee.category === 'ضابط صف' ? 'bg-green-100 text-green-800' :
-                                  stat.employee.category === 'مهني' ? 'bg-purple-100 text-purple-800' :
-                                  'bg-gray-100 text-gray-800'
-                                }`}>
-                                  {stat.employee.category === 'ضابط' || stat.employee.category === 'ضابط صف'
-                                    ? stat.employee.rank
-                                    : stat.employee.category}
-                                </span>
-                              </div>
+                          .map((stat,index) => (
+                          <tr>
+                           <td className="py-4 px-3 text-center">
+                              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center font-bold text-blue-600 mx-auto">
+                               {index + 1}
+                              </div>                              
                             </td>
-                            <td className="py-6 px-4 font-bold text-gray-900 border-r border-gray-100">
+                            <td className="py-4 px-3 text-center">
+                                {stat.employee.category === 'ضابط' || stat.employee.category === 'ضابط صف'
+                                  ? stat.employee.rank
+                                  : stat.employee.category}
+                            </td>
+                            <td className="py-4 px-4">
                               <div className="flex flex-col">
-                                <span className="text-lg">{stat.employee.full_name}</span>
-                                <span className="text-xs text-gray-500">رقم الملف: {stat.employee.file_number}</span>
+                                <span className="font-bold text-gray-900">{stat.employee.full_name}</span>
+                                <span className="text-sm text-gray-400">رقم الملف: {stat.employee.file_number}</span>
                               </div>
                             </td>
-                            <td className="py-6 px-4 text-center border-r border-gray-100">
-                              <div className="flex flex-col items-center gap-2">
-                                {/* Progress Bar for Hours */}
-                                <div className="w-full max-w-20">
-                                  <div className="flex items-center justify-between mb-1">
-                                    <span className="text-lg font-bold text-gray-800">{stat.totalHours}</span>
-                                    <span className="text-xs text-gray-500">/{MONTHLY_LIMITS.MAX_HOURS_PER_MONTH}</span>
-                                  </div>
-                                  <div className="w-full bg-gray-200 rounded-full h-2">
-                                    <div
-                                      className={`h-2 rounded-full transition-all duration-300 ${
-                                        stat.totalHours > MONTHLY_LIMITS.MAX_HOURS_PER_MONTH
-                                          ? 'bg-red-500'
-                                          : stat.totalHours === MONTHLY_LIMITS.MAX_HOURS_PER_MONTH
-                                          ? 'bg-yellow-500'
-                                          : 'bg-blue-500'
-                                      }`}
-                                      style={{
-                                        width: `${Math.min((stat.totalHours / MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) * 100, 100)}%`
-                                      }}
-                                    ></div>
-                                  </div>
-                                  <div className="text-xs text-gray-500 mt-1">ساعة</div>
-                                </div>
+                            <td className="py-4 px-3 text-center">
+                              <div className="flex flex-col items-center gap-1">
+                                <ProgressCircle
+                                  current={stat.fullDayLicenses}
+                                  max={MONTHLY_LIMITS.FULL_DAY_LICENSES}
+                                  status={stat.fullDayStatus}
+                                  size={52}
+                                />
+                                <span className="text-xs text-gray-500">من {MONTHLY_LIMITS.FULL_DAY_LICENSES}</span>
                               </div>
                             </td>
-                            <td className="py-6 px-4 text-center border-r border-gray-100">
-                              <div className="flex flex-col items-center gap-2">
-                                {/* Badge Style for Short Licenses */}
-                                <div className="relative">
-                                  <div className={`inline-flex items-center justify-center w-12 h-12 rounded-full text-lg font-bold ${
-                                    stat.shortLicenses > MONTHLY_LIMITS.SHORT_LICENSES
-                                      ? 'bg-red-100 text-red-700 border-2 border-red-300'
-                                      : stat.shortLicenses === MONTHLY_LIMITS.SHORT_LICENSES
-                                      ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300'
-                                      : 'bg-green-100 text-green-700 border-2 border-green-300'
-                                  }`}>
-                                    {stat.shortLicenses}
-                                  </div>
-                                  {stat.shortLicenses > 0 && (
-                                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-orange-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
-                                      {stat.shortLicenses}
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="text-xs text-gray-500">من {MONTHLY_LIMITS.SHORT_LICENSES}</div>
+                            <td className="py-4 px-3 text-center">
+                              <div className="flex flex-col items-center gap-1">
+                                <ProgressCircle
+                                  current={stat.shortLicenses}
+                                  max={MONTHLY_LIMITS.SHORT_LICENSES}
+                                  status={stat.shortLicensesStatus}
+                                  size={52}
+                                />
+                                <span className="text-xs text-gray-500">من {MONTHLY_LIMITS.SHORT_LICENSES}</span>
                               </div>
                             </td>
-                            <td className="py-6 px-4 text-center border-r border-gray-100">
-                              <div className="flex flex-col items-center gap-2">
-                                {/* Badge Style for Full Day Licenses */}
-                                <div className="relative">
-                                  <div className={`inline-flex items-center justify-center w-12 h-12 rounded-full text-lg font-bold ${
-                                    stat.fullDayLicenses > MONTHLY_LIMITS.FULL_DAY_LICENSES
-                                      ? 'bg-red-100 text-red-700 border-2 border-red-300'
-                                      : stat.fullDayLicenses === MONTHLY_LIMITS.FULL_DAY_LICENSES
-                                      ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300'
-                                      : 'bg-blue-100 text-blue-700 border-2 border-blue-300'
-                                  }`}>
-                                    {stat.fullDayLicenses}
-                                  </div>
-                                  {stat.fullDayLicenses > 0 && (
-                                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-purple-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
-                                      {stat.fullDayLicenses}
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="text-xs text-gray-500">من {MONTHLY_LIMITS.FULL_DAY_LICENSES}</div>
+                            <td className="py-4 px-3 text-center">
+                              <div className="flex flex-col items-center gap-1">
+                                <ProgressCircle
+                                  current={stat.totalHours}
+                                  max={MONTHLY_LIMITS.MAX_SHORT_HOURS_PER_MONTH}
+                                  status={stat.shortLicensesStatus}
+                                  size={52}
+                                />
+                                <span className="text-xs text-gray-500">من {MONTHLY_LIMITS.MAX_SHORT_HOURS_PER_MONTH} ساعة</span>
                               </div>
                             </td>
-                            <td className="py-6 px-4 text-center">
-                              <div className="flex flex-col items-center gap-2">
-                                {stat.isOverLimit ? (
-                                  <>
-                                    <div className="bg-red-100 border border-red-300 rounded-lg p-3 w-full max-w-32">
-                                      <div className="flex items-center justify-center gap-2 mb-2">
-                                        <AlertTriangle className="w-5 h-5 text-red-600" />
-                                        <span className="text-red-700 font-bold text-sm">تجاوز الحد</span>
-                                      </div>
-                                      <div className="space-y-1">
-                                        {stat.fullDayLicenses > MONTHLY_LIMITS.FULL_DAY_LICENSES && (
-                                          <div className="bg-red-200 rounded px-2 py-1">
-                                            <span className="text-red-800 text-xs font-semibold">طويلة: +{stat.fullDayLicenses - MONTHLY_LIMITS.FULL_DAY_LICENSES}</span>
-                                          </div>
-                                        )}
-                                        {stat.shortLicenses > MONTHLY_LIMITS.SHORT_LICENSES && (
-                                          <div className="bg-orange-200 rounded px-2 py-1">
-                                            <span className="text-orange-800 text-xs font-semibold">قصيرة: +{stat.shortLicenses - MONTHLY_LIMITS.SHORT_LICENSES}</span>
-                                          </div>
-                                        )}
-                                        {stat.totalHours > MONTHLY_LIMITS.MAX_HOURS_PER_MONTH && (
-                                          <div className="bg-red-200 rounded px-2 py-1">
-                                            <span className="text-red-800 text-xs font-semibold">ساعات: +{stat.totalHours - MONTHLY_LIMITS.MAX_HOURS_PER_MONTH}</span>
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </>
-                                ) : stat.isAtLimit ? (
-                                  <>
-                                    <div className="bg-yellow-100 border border-yellow-300 rounded-lg p-3 w-full max-w-32">
-                                      <div className="flex items-center justify-center gap-2 mb-2">
-                                        <Clock className="w-5 h-5 text-yellow-600" />
-                                        <span className="text-yellow-700 font-bold text-sm">وصل للحد</span>
-                                      </div>
-                                      <div className="space-y-1">
-                                        {stat.fullDayLicenses === MONTHLY_LIMITS.FULL_DAY_LICENSES && (
-                                          <div className="bg-yellow-200 rounded px-2 py-1">
-                                            <span className="text-yellow-800 text-xs font-semibold">طويلة: {MONTHLY_LIMITS.FULL_DAY_LICENSES}/{MONTHLY_LIMITS.FULL_DAY_LICENSES}</span>
-                                          </div>
-                                        )}
-                                        {stat.shortLicenses === MONTHLY_LIMITS.SHORT_LICENSES && (
-                                          <div className="bg-yellow-200 rounded px-2 py-1">
-                                            <span className="text-yellow-800 text-xs font-semibold">قصيرة: {MONTHLY_LIMITS.SHORT_LICENSES}/{MONTHLY_LIMITS.SHORT_LICENSES}</span>
-                                          </div>
-                                        )}
-                                        {stat.totalHours === MONTHLY_LIMITS.MAX_HOURS_PER_MONTH && (
-                                          <div className="bg-red-200 rounded px-2 py-1">
-                                            <span className="text-red-800 text-xs font-semibold">ساعات: {MONTHLY_LIMITS.MAX_HOURS_PER_MONTH}/{MONTHLY_LIMITS.MAX_HOURS_PER_MONTH}</span>
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </>
+                            <td className="py-4 px-4 text-center">
+                              <div className="flex items-center justify-center">
+                                {stat.overallStatus === 'danger' ? (
+                                  <div className="flex items-center gap-2 px-3 py-2 bg-red-100 border border-red-300 rounded-lg">
+                                    <AlertTriangle className="w-4 h-4 text-red-600" />
+                                    <span className="text-red-700 font-semibold text-sm">
+                                      {stat.fullDayStatus === 'danger' ? 'تحذير استئذانات طويلة' : 'تحذير استئذانات قصيرة'}
+                                    </span>
+                                  </div>
+                                ) : stat.overallStatus === 'warning' ? (
+                                  <div className="flex items-center gap-2 px-3 py-2 bg-yellow-100 border border-yellow-300 rounded-lg">
+                                    <Clock className="w-4 h-4 text-yellow-600" />
+                                    <span className="text-yellow-700 font-semibold text-sm">
+                                      {stat.fullDayStatus === 'warning' ? 'تنبيه استئذانات طويلة' : 'تنبيه استئذانات قصيرة'}
+                                    </span>
+                                  </div>
                                 ) : (
-                                  <div className="bg-green-100 border border-green-300 rounded-lg p-3 w-full max-w-32">
-                                    <div className="flex items-center justify-center gap-2 mb-2">
-                                      <CheckCircle className="w-5 h-5 text-green-600" />
-                                      <span className="text-green-700 font-bold text-sm">ضمن الحد</span>
-                                    </div>
-                                    <div className="grid grid-cols-1 gap-1 text-xs">
-                                      <div className="text-green-700">
-                                        <span className="font-semibold">متبقي:</span>
-                                      </div>
-                                      <div className="text-green-600">
-                                        طويلة: {stat.remainingFullDays}
-                                      </div>
-                                      <div className="text-green-600">
-                                        قصيرة: {stat.remainingShortLicenses}
-                                      </div>
-                                      <div className="text-green-600">
-                                        ساعات: {stat.remainingHours}
-                                      </div>
-                                    </div>
+                                  <div className="flex items-center gap-2 px-3 py-2 bg-green-100 border border-green-300 rounded-lg">
+                                    <CheckCircle className="w-4 h-4 text-green-600" />
+                                    <span className="text-green-700 font-semibold text-sm">ضمن الحد</span>
                                   </div>
                                 )}
                               </div>
                             </td>
+
                           </tr>
                         ))}
                       </tbody>
@@ -1636,30 +1591,34 @@ const Reports: React.FC = () => {
               {reportData.length > 0 ? (
                 <>
                   {/* Report Summary */}
-                  <div className="mb-6 p-4 bg-gray-50 rounded-xl">
-                    <h3 className="text-lg font-bold text-gray-800 mb-2">ملخص التقرير</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-600">إجمالي الموظفين:</span>
-                        <span className="font-bold text-blue-600 mr-2">{reportData.length}</span>
+                  <div className="mb-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4">ملخص التقرير</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                        <div className="w-4 h-4 bg-blue-500 rounded mx-auto mb-2"></div>
+                        <div className="text-2xl font-bold text-blue-700">{reportData.length}</div>
+                        <div className="text-sm text-blue-600 font-medium">إجمالي الموظفين</div>
                       </div>
-                      <div>
-                        <span className="text-gray-600">إجمالي الاستئذانات:</span>
-                        <span className="font-bold text-green-600 mr-2">
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                        <div className="w-4 h-4 bg-green-500 rounded mx-auto mb-2"></div>
+                        <div className="text-2xl font-bold text-green-700">
                           {reportData.reduce((sum, emp) => sum + emp.fullDays + emp.halfDays, 0)}
-                        </span>
+                        </div>
+                        <div className="text-sm text-green-600 font-medium">إجمالي الاستئذانات</div>
                       </div>
-                      <div>
-                        <span className="text-gray-600">استئذانات طويلة:</span>
-                        <span className="font-bold text-purple-600 mr-2">
+                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 text-center">
+                        <div className="w-4 h-4 bg-purple-500 rounded mx-auto mb-2"></div>
+                        <div className="text-2xl font-bold text-purple-700">
                           {reportData.reduce((sum, emp) => sum + emp.fullDays, 0)}
-                        </span>
+                        </div>
+                        <div className="text-sm text-purple-600 font-medium">استئذانات طويلة</div>
                       </div>
-                      <div>
-                        <span className="text-gray-600">استئذانات قصيرة:</span>
-                        <span className="font-bold text-orange-600 mr-2">
+                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center">
+                        <div className="w-4 h-4 bg-orange-500 rounded mx-auto mb-2"></div>
+                        <div className="text-2xl font-bold text-orange-700">
                           {reportData.reduce((sum, emp) => sum + emp.halfDays, 0)}
-                        </span>
+                        </div>
+                        <div className="text-sm text-orange-600 font-medium">استئذانات قصيرة</div>
                       </div>
                     </div>
                   </div>
@@ -1670,12 +1629,12 @@ const Reports: React.FC = () => {
                       <thead>
                         <tr className="border-b-2 border-gray-200">
                           <th className="text-right py-4 px-4 font-bold text-gray-700">م</th>
-                          <th className="text-right py-4 px-4 font-bold text-gray-700">الرتبة/الفئة</th>
+                          <th className="text-right py-4 px-4 font-bold text-gray-700">الرتبة</th>
                           <th className="text-right py-4 px-4 font-bold text-gray-700">الاسم</th>
                           <th className="text-center py-4 px-4 font-bold text-gray-700">رقم الملف</th>
                           <th className="text-center py-4 px-4 font-bold text-gray-700">استئذانات طويلة</th>
                           <th className="text-center py-4 px-4 font-bold text-gray-700">استئذانات قصيرة</th>
-                          <th className="text-center py-4 px-4 font-bold text-gray-700">إجمالي الساعات</th>
+                          <th className="text-center py-4 px-4 font-bold text-gray-700">ساعات الاستئذانات القصيرة</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
@@ -1686,14 +1645,12 @@ const Reports: React.FC = () => {
                                 {index + 1}
                               </div>
                             </td>
-                            <td className="py-4 px-4">
-                              <span className="bg-gray-100 px-3 py-1 rounded-full text-xs font-semibold">
-                                {item.employee.category === 'ضابط' || item.employee.category === 'ضابط صف'
-                                  ? item.employee.rank
-                                  : item.employee.category}
-                              </span>
+                            <td className="py-4 px-4 text-gray-700">
+                              {item.employee.category === 'ضابط' || item.employee.category === 'ضابط صف'
+                                ? item.employee.rank
+                                : item.employee.category}
                             </td>
-                            <td className="py-4 px-4 font-medium text-gray-900">{item.employee.full_name}</td>
+                            <td className="py-4 px-4 font-bold text-gray-900">{item.employee.full_name}</td>
                             <td className="py-4 px-4 text-center text-gray-700">{item.employee.file_number}</td>
                             <td className="py-4 px-4 text-center">
                               <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-bold">
@@ -1707,7 +1664,7 @@ const Reports: React.FC = () => {
                             </td>
                             <td className="py-4 px-4 text-center">
                               <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-bold">
-                                {item.totalHours} ساعة
+                                {item.totalHours > 0 ? `${item.totalHours} ساعة` : '-'}
                               </span>
                             </td>
                           </tr>
