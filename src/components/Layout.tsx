@@ -14,8 +14,8 @@ const getPageTitle = (activeTab: string): string => {
     'add-license': 'تسجيل رخصة تقليدية',
     'licenses': 'قائمة الرخص',
     'employees': 'إدارة الموظفين',
-    'reports': 'التقارير الحديثة',
-    'old-reports': 'التقارير التقليدية',
+    'reports': 'إنشاء تقرير جديد',
+    'old-reports': 'التقارير الشاملة',
   };
   return titles[activeTab] || 'نظام إدارة الرخص';
 };
@@ -27,7 +27,8 @@ const getPageSubtitle = (activeTab: string): string => {
     'add-license': 'إضافة رخصة جديدة لموظف أو عدة موظفين',
     'licenses': 'عرض وإدارة جميع الرخص المسجلة',
     'employees': 'إدارة بيانات الموظفين',
-    'reports': 'تقارير وإحصائيات مفصلة',
+    'reports': 'نظام متطور لإنشاء التقارير بخطوات سهلة ومنظمة',
+    'old-reports': 'تقارير وإحصائيات مفصلة بالطريقة التقليدية',
     'alerts': 'التنبيهات والإشعارات',
     'settings': 'إعدادات النظام'
   };

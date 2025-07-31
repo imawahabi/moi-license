@@ -1,276 +1,331 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Select from 'react-select';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
-import { Packer, Document, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, WidthType, BorderStyle, VerticalAlign, UnderlineType, ShadingType, HeightRule } from 'docx';
+import { Packer, Document, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, WidthType, VerticalAlign } from 'docx';
 import { saveAs } from 'file-saver';
-import { Search, Filter, FileText, Printer, Calendar } from 'lucide-react';
-import DatePicker from './DatePicker';
-
-import SultanBold from '../assets/fonts/Sultan-bold-normal.js';
-import TimesBold from '../assets/fonts/Times-New-Roman-bold.js';
+import { Search, FileText, Printer, Calendar, Users, Eye, X, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 
 import { LicenseService } from '../services/licenseService';
-import { EmployeeService } from '../services/employeeService';
-import { Employee, License, FilterOptions, EmployeeLicenseStats } from '../types';
-import { CATEGORY_ORDER, OFFICER_RANK_ORDER, NCO_RANK_ORDER } from '../utils/sorting';
+import { Employee, License } from '../types';
+import { CATEGORY_ORDER } from '../utils/sorting';
 
-const getMonthName = (monthIndex: number) => {
-  const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-  return months[monthIndex];
+// Constants for monthly limits
+const MONTHLY_LIMITS = {
+  FULL_DAY_LICENSES: 3,
+  SHORT_LICENSES: 4,
+  MAX_HOURS_PER_MONTH: 12
+};
+
+// تاريخ بداية تطبيق الحدود الشهرية - أول يوم في الشهر الحالي
+const getCurrentMonthStart = () => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1);
+};
+const MONTHLY_LIMITS_START_DATE = getCurrentMonthStart();
+
+interface ReportConfig {
+  title: string;
+  dateRange: {
+    startDate: string;
+    endDate: string;
+  };
+  categories: string[];
+  reportType: 'yearly' | 'monthly' | 'employee' | 'multi';
+  selectedYear?: string;
+  selectedMonths: string[];
+  selectedEmployees: string[];
+}
+
+interface EmployeeReportData {
+  employee: Employee;
+  fullDays: number;
+  halfDays: number;
+  totalHours: number;
+}
+
+interface MonthlyEmployeeStats {
+  employee: Employee;
+  fullDayLicenses: number;
+  shortLicenses: number;
+  totalHours: number;
+  remainingFullDays: number;
+  remainingShortLicenses: number;
+  remainingHours: number;
+  isOverLimit: boolean;
+  isAtLimit: boolean;
+  warnings: string[];
+}
+
+const customSelectStyles = {
+  control: (provided: any) => ({
+    ...provided,
+    minHeight: '44px',
+    border: '2px solid #e5e7eb',
+    borderRadius: '12px',
+    '&:hover': {
+      borderColor: '#3b82f6',
+    },
+    '&:focus-within': {
+      borderColor: '#3b82f6',
+      boxShadow: '0 0 0 3px rgba(59, 130, 246, 0.1)',
+    },
+  }),
+  option: (provided: any, state: any) => ({
+    ...provided,
+    backgroundColor: state.isSelected ? '#3b82f6' : state.isFocused ? '#eff6ff' : 'white',
+    color: state.isSelected ? 'white' : '#374151',
+    padding: '12px 16px',
+  }),
+  multiValue: (provided: any) => ({
+    ...provided,
+    backgroundColor: '#eff6ff',
+    borderRadius: '6px',
+  }),
+  multiValueLabel: (provided: any) => ({
+    ...provided,
+    color: '#1e40af',
+    fontWeight: '500',
+  }),
+  multiValueRemove: (provided: any) => ({
+    ...provided,
+    color: '#1e40af',
+    '&:hover': {
+      backgroundColor: '#dbeafe',
+      color: '#1e40af',
+    },
+  }),
 };
 
 const Reports: React.FC = () => {
-  const [employees, setEmployees] = useState<Employee[]>([]);
   const [licenses, setLicenses] = useState<License[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<'rank' | 'total' | 'name'>('rank');
-  // Smart default filters - show all data initially, but with current month date range
-  const getCurrentMonthDefaults = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    const firstDay = new Date(year, now.getMonth(), 1);
-    const today = now;
-
-    return {
-      year: year.toString(),
-      months: [month],
-      startDate: firstDay.toISOString().split('T')[0],
-      endDate: today.toISOString().split('T')[0]
-    };
-  };
-
-  const defaults = getCurrentMonthDefaults();
-  // Start with minimal filters to show data
-  const [filters, setFilters] = useState<FilterOptions>({});
-  const [dateRange, setDateRange] = useState({
-    startDate: '',
-    endDate: ''
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState<'monthly-limits' | 'custom-reports'>('monthly-limits');
+  
+  const [reportConfig, setReportConfig] = useState<ReportConfig>({
+    title: '',
+    dateRange: {
+      startDate: (() => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        return `${year}-${month}-01`;
+      })(),
+      endDate: new Date().toISOString().split('T')[0]
+    },
+    categories: [],
+    reportType: 'multi',
+    selectedYear: new Date().getFullYear().toString(),
+    selectedMonths: [(new Date().getMonth() + 1).toString()],
+    selectedEmployees: [],
   });
-  const [showFilters, setShowFilters] = useState(false);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const [search, setSearch] = useState('');
-  const [selectedEmployees, setSelectedEmployees] = useState<any[]>([]);
 
+  // Load data on component mount
   useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const licensesData = await LicenseService.getAll();
+        setLicenses(licensesData);
+      } catch (error) {
+        console.error('Error loading data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     loadData();
   }, []);
 
-  const handleFilterChange = (key: string, value: any) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-  };
+  // Calculate monthly stats for current month
+  const calculateMonthlyStats = useMemo(() => {
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth() + 1;
 
-  // Smart date range handler with improved logic
-  const handleDateRangeChange = (field: 'startDate' | 'endDate', value: string) => {
-    console.log(`=== DATE RANGE CHANGE ===`);
-    console.log(`Setting ${field} to:`, value);
+    const stats: MonthlyEmployeeStats[] = [];
 
-    const newDateRange = { ...dateRange, [field]: value };
-    setDateRange(newDateRange);
-
-    // When date range is set, clear conflicting filters
-    if (value && (newDateRange.startDate || newDateRange.endDate)) {
-      console.log('Clearing conflicting filters due to date range');
-      setFilters(prev => ({
-        ...prev,
-        months: undefined,
-        year: undefined
-      } as any));
-    }
-
-    console.log('New date range:', newDateRange);
-    console.log(`=== END DATE RANGE CHANGE ===`);
-  };
-
-  const loadData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [employeesData, licensesData] = await Promise.all([
-        EmployeeService.getAll(),
-        LicenseService.getAll()
-      ]);
-      setEmployees(employeesData);
-      setLicenses(licensesData);
-
-      // Set initial load flag
-      if (isInitialLoad) {
-        setIsInitialLoad(false);
+    // Get unique employees from licenses
+    const uniqueEmployeesInData = new Map<string, Employee>();
+    licenses.forEach(license => {
+      if (license.employee) {
+        uniqueEmployeesInData.set(license.employee.id.toString(), license.employee);
       }
-    } catch (err) {
-      console.error("Failed to load report data:", err);
-      setError("حدث خطأ أثناء تحميل بيانات التقارير. يرجى المحاولة مرة أخرى.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const allYears = Array.from(new Set(licenses.map(l => new Date(l.license_date).getFullYear().toString()))).sort((a, b) => b.localeCompare(a));
-
-  // Define applyDateRangeFilter function before useMemo
-  const applyDateRangeFilter = (stats: EmployeeLicenseStats[]) => {
-    if (!dateRange.startDate && !dateRange.endDate) return stats;
-
-    return stats.filter(stat => {
-      const statDate = new Date(stat.year, stat.month - 1);
-      const start = dateRange.startDate ? new Date(dateRange.startDate) : null;
-      const end = dateRange.endDate ? new Date(dateRange.endDate) : null;
-
-      if (start && end) {
-        return statDate >= start && statDate <= end;
-      } else if (start) {
-        return statDate >= start;
-      } else if (end) {
-        return statDate <= end;
-      }
-      return true;
     });
-  };
 
-  const availableRanks = React.useMemo(() => {
-    if (!filters.category) return [];
-    if (filters.category === 'ضابط') return Object.keys(OFFICER_RANK_ORDER);
-    if (filters.category === 'ضابط صف') return Object.keys(NCO_RANK_ORDER);
-    return [];
-  }, [filters.category]);
+    Array.from(uniqueEmployeesInData.values()).forEach(employee => {
+      const employeeLicenses = licenses.filter(license => {
+        if (!license.employee || license.employee.id !== employee.id) return false;
 
-  // Smart filtering logic - completely rewritten
-  const filteredLicenses = React.useMemo(() => {
-    console.log('=== FILTERING DEBUG ===');
-    console.log('Total licenses:', licenses.length);
-    console.log('Current filters:', filters);
-    console.log('Date range:', dateRange);
+        const licenseDate = new Date(license.license_date);
+        return licenseDate.getFullYear() === currentYear &&
+               licenseDate.getMonth() + 1 === currentMonth;
+      });
 
-    if (licenses.length === 0) {
-      console.log('No licenses to filter');
-      return [];
-    }
+      let fullDayLicenses = 0;
+      let shortLicenses = 0;
+      let totalHours = 0;
 
-    const filtered = licenses.filter(license => {
-      if (!license.employee) {
-        console.log('License without employee, skipping');
-        return false;
+      employeeLicenses.forEach(license => {
+        const licenseDate = new Date(license.license_date);
+        const isAfterLimitsStart = licenseDate >= MONTHLY_LIMITS_START_DATE;
+
+        // تصحيح المنطق: الاستئذان القصير هو "نصف يوم" وليس بناءً على الساعات
+        if (license.license_type === 'نصف يوم') {
+          if (isAfterLimitsStart) {
+            shortLicenses++;
+          }
+          totalHours += license.hours || 4; // افتراض 4 ساعات لنصف يوم
+        } else if (license.license_type === 'يوم كامل') {
+          if (isAfterLimitsStart) {
+            fullDayLicenses++;
+          }
+          totalHours += 8; // 8 ساعات ليوم كامل
+        }
+      });
+
+      const remainingFullDays = Math.max(0, MONTHLY_LIMITS.FULL_DAY_LICENSES - fullDayLicenses);
+      const remainingShortLicenses = Math.max(0, MONTHLY_LIMITS.SHORT_LICENSES - shortLicenses);
+      const remainingHours = Math.max(0, MONTHLY_LIMITS.MAX_HOURS_PER_MONTH - totalHours);
+
+      const warnings: string[] = [];
+      let isOverLimit = false;
+      let isAtLimit = false;
+
+      if (fullDayLicenses > MONTHLY_LIMITS.FULL_DAY_LICENSES) {
+        warnings.push(`تجاوز حد الاستئذانات الطويلة (${fullDayLicenses}/${MONTHLY_LIMITS.FULL_DAY_LICENSES})`);
+        isOverLimit = true;
+      } else if (fullDayLicenses === MONTHLY_LIMITS.FULL_DAY_LICENSES) {
+        isAtLimit = true;
       }
+
+      if (shortLicenses > MONTHLY_LIMITS.SHORT_LICENSES) {
+        warnings.push(`تجاوز حد الاستئذانات القصيرة (${shortLicenses}/${MONTHLY_LIMITS.SHORT_LICENSES})`);
+        isOverLimit = true;
+      } else if (shortLicenses === MONTHLY_LIMITS.SHORT_LICENSES) {
+        isAtLimit = true;
+      }
+
+      if (totalHours > MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) {
+        warnings.push(`تجاوز حد الساعات الشهرية (${totalHours}/${MONTHLY_LIMITS.MAX_HOURS_PER_MONTH})`);
+        isOverLimit = true;
+      } else if (totalHours === MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) {
+        isAtLimit = true;
+      }
+
+      // Only include employees who have licenses this month
+      if (employeeLicenses.length > 0) {
+        stats.push({
+          employee,
+          fullDayLicenses,
+          shortLicenses,
+          totalHours,
+          remainingFullDays,
+          remainingShortLicenses,
+          remainingHours,
+          isOverLimit,
+          isAtLimit,
+          warnings
+        });
+      }
+    });
+
+    return stats.sort((a, b) => {
+      // Sort by category first, then by name
+      const categoryA = CATEGORY_ORDER[a.employee.category] ?? 99;
+      const categoryB = CATEGORY_ORDER[b.employee.category] ?? 99;
+
+      if (categoryA !== categoryB) {
+        return categoryA - categoryB;
+      }
+
+      return a.employee.full_name.localeCompare(b.employee.full_name, 'ar');
+    });
+  }, [licenses]);
+
+  // Filter licenses based on config and search
+  const filteredLicenses = useMemo(() => {
+    let filtered = licenses.filter(license => {
+      if (!license.employee) return false;
 
       const licenseDate = new Date(license.license_date);
 
-      // Date range filter (PRIMARY - most important)
-      let dateRangeMatch = true;
-      if (dateRange.startDate && dateRange.endDate) {
-        const startDate = new Date(dateRange.startDate);
-        const endDate = new Date(dateRange.endDate);
-        // Set end date to end of day
-        endDate.setHours(23, 59, 59, 999);
-        dateRangeMatch = licenseDate >= startDate && licenseDate <= endDate;
-
-        if (!dateRangeMatch) {
-          console.log(`Date filter failed for ${license.employee.full_name}: ${licenseDate.toDateString()} not between ${startDate.toDateString()} and ${endDate.toDateString()}`);
+      // Report type specific filtering
+      if (reportConfig.reportType === 'yearly' && reportConfig.selectedYear) {
+        if (licenseDate.getFullYear() !== parseInt(reportConfig.selectedYear)) {
+          return false;
         }
-      } else if (dateRange.startDate) {
-        const startDate = new Date(dateRange.startDate);
-        dateRangeMatch = licenseDate >= startDate;
-      } else if (dateRange.endDate) {
-        const endDate = new Date(dateRange.endDate);
-        endDate.setHours(23, 59, 59, 999);
-        dateRangeMatch = licenseDate <= endDate;
-      }
+      } else if (reportConfig.reportType === 'monthly' && reportConfig.selectedYear && reportConfig.selectedMonths.length > 0) {
+        if (licenseDate.getFullYear() !== parseInt(reportConfig.selectedYear) ||
+            !reportConfig.selectedMonths.includes((licenseDate.getMonth() + 1).toString())) {
+          return false;
+        }
+      } else if (reportConfig.reportType === 'employee' && reportConfig.selectedEmployees.length > 0) {
+        if (!reportConfig.selectedEmployees.includes(license.employee.id.toString())) {
+          return false;
+        }
+      } else if (reportConfig.reportType === 'multi') {
+        // Multi-criteria filtering
+        let passesFilter = true;
 
-      // Year filter
-      const licenseYear = licenseDate.getFullYear().toString();
-      const yearMatch = !filters.year || licenseYear === filters.year;
+        // Year filter
+        if (reportConfig.selectedYear && licenseDate.getFullYear() !== parseInt(reportConfig.selectedYear)) {
+          passesFilter = false;
+        }
 
-      // Month filter (only if no date range is specified)
-      let monthMatch = true;
-      if (!dateRange.startDate && !dateRange.endDate) {
-        const licenseMonth = licenseDate.getMonth() + 1;
-        const monthsFilter = (filters as any).months;
-        monthMatch = !monthsFilter || monthsFilter.length === 0 || monthsFilter.includes(licenseMonth);
+        // Months filter
+        if (reportConfig.selectedMonths.length > 0 &&
+            !reportConfig.selectedMonths.includes((licenseDate.getMonth() + 1).toString())) {
+          passesFilter = false;
+        }
+
+        // Employees filter
+        if (reportConfig.selectedEmployees.length > 0 &&
+            !reportConfig.selectedEmployees.includes(license.employee.id.toString())) {
+          passesFilter = false;
+        }
+
+        if (!passesFilter) return false;
       }
 
       // Category filter
-      const categoriesFilter = (filters as any).categories;
-      const categoryMatch = !categoriesFilter || categoriesFilter.length === 0 ||
-        categoriesFilter.includes(license.employee.category);
-
-      // License type filter
-      const licenseTypeMatch = !filters.license_type || license.license_type === filters.license_type;
-
-      const finalMatch = dateRangeMatch && yearMatch && monthMatch && categoryMatch && licenseTypeMatch;
-
-      if (!finalMatch) {
-        console.log(`Filter failed for ${license.employee.full_name}:`, {
-          dateRangeMatch,
-          yearMatch,
-          monthMatch,
-          categoryMatch,
-          licenseTypeMatch
-        });
+      if (reportConfig.categories.length > 0 && !reportConfig.categories.includes(license.employee.category)) {
+        return false;
       }
 
-      return finalMatch;
-    });
+      // Search filter
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        return (
+          license.employee.full_name.toLowerCase().includes(searchLower) ||
+          license.employee.rank.toLowerCase().includes(searchLower) ||
+          license.employee.category.toLowerCase().includes(searchLower)
+        );
+      }
 
-    console.log('Filtered result:', filtered.length, 'licenses');
-    console.log('=== END FILTERING DEBUG ===');
+      return true;
+    });
 
     return filtered;
-  }, [licenses, filters, dateRange]);
+  }, [licenses, reportConfig, searchTerm]);
 
-  const statsByEmployeeAndMonth = useMemo(() => {
-    const stats: Record<string, EmployeeLicenseStats> = {};
-    filteredLicenses.forEach((license) => {
-      if (!license.employee) return;
-      const licenseDate = new Date(license.license_date);
-      const year = licenseDate.getFullYear();
-      const month = licenseDate.getMonth();
-      const monthName = getMonthName(month);
-      const key = `${license.employee_id}-${year}-${month}`;
-
-      if (!stats[key]) {
-        stats[key] = {
-          employee: license.employee,
-          total: 0,
-          fullDay: 0,
-          halfDay: 0,
-          totalHours: 0,
-          month: monthName,
-          year: year
-        };
-      }
-      stats[key].total += 1;
-      if (license.license_type === 'يوم كامل') {
-        stats[key].fullDay += 1;
-      } else if (license.license_type === 'نصف يوم') {
-        stats[key].halfDay += 1;
-        stats[key].totalHours += license.hours || 0;
-      }
-    });
-    return Object.values(stats);
-  }, [filteredLicenses]);
-
-  // Professional report data matching the document format
-  const professionalReportData = React.useMemo(() => {
-    console.log('=== GENERATING PROFESSIONAL REPORT ===');
-    console.log('Filtered licenses count:', filteredLicenses.length);
-
-    const employeeMap = new Map();
+  // Generate report data
+  const reportData = useMemo(() => {
+    const employeeMap = new Map<string, EmployeeReportData>();
 
     filteredLicenses.forEach(license => {
-      const employeeId = license.employee.id;
+      if (!license.employee) return;
+
+      const employeeId = license.employee.id.toString();
       if (!employeeMap.has(employeeId)) {
         employeeMap.set(employeeId, {
           employee: license.employee,
           fullDays: 0,
           halfDays: 0,
-          totalHours: 0,
-          licenses: []
+          totalHours: 0
         });
       }
 
-      const data = employeeMap.get(employeeId);
-      data.licenses.push(license);
+      const data = employeeMap.get(employeeId)!
 
       if (license.license_type === 'يوم كامل') {
         data.fullDays += 1;
@@ -281,776 +336,1396 @@ const Reports: React.FC = () => {
       }
     });
 
-    const result = Array.from(employeeMap.values()).sort((a, b) => {
-      // Professional sorting: Category first, then rank within category
-      const categoryOrder = { 'ضابط': 1, 'ضابط صف': 2, 'عريف': 3 };
-      const aCategoryOrder = categoryOrder[a.employee.category as keyof typeof categoryOrder] || 4;
-      const bCategoryOrder = categoryOrder[b.employee.category as keyof typeof categoryOrder] || 4;
+    return Array.from(employeeMap.values()).sort((a, b) => {
+      const aCategoryOrder = CATEGORY_ORDER[a.employee.category] || 99;
+      const bCategoryOrder = CATEGORY_ORDER[b.employee.category] || 99;
 
       if (aCategoryOrder !== bCategoryOrder) {
         return aCategoryOrder - bCategoryOrder;
       }
 
-      // Sort by rank within category (higher ranks first)
-      if (a.employee.category === 'ضابط') {
-        return (OFFICER_RANK_ORDER[a.employee.rank] || 999) - (OFFICER_RANK_ORDER[b.employee.rank] || 999);
-      } else if (a.employee.category === 'ضابط صف') {
-        return (NCO_RANK_ORDER[a.employee.rank] || 999) - (NCO_RANK_ORDER[b.employee.rank] || 999);
-      }
-
       return a.employee.full_name.localeCompare(b.employee.full_name, 'ar');
     });
-
-    console.log('Generated professional report:', result.length, 'employees');
-    console.log('=== END PROFESSIONAL REPORT ===');
-
-    return result;
   }, [filteredLicenses]);
 
-  const selectableEmployees = useMemo(() => {
-    const employeesWithLicensesInFilter = new Set(filteredLicenses.map(l => l.employee_id));
-    return employees
-      .filter(emp => employeesWithLicensesInFilter.has(emp.id))
-      .map(emp => ({ value: emp.id, label: emp.full_name }));
-  }, [employees, filteredLicenses]);
-
-  const sortedStats = useMemo(() => {
-    let statsToSort = [...statsByEmployeeAndMonth];
-
-    // Apply date range filter
-    statsToSort = applyDateRangeFilter(statsToSort);
-
-    if (selectedEmployees.length > 0) {
-      const selectedIds = new Set(selectedEmployees.map(s => s.value));
-      statsToSort = statsToSort.filter(stat => selectedIds.has(stat.employee.id));
-    }
-
-    if (search) {
-      statsToSort = statsToSort.filter(stat =>
-        stat.employee.full_name.toLowerCase().includes(search.toLowerCase()) ||
-        stat.employee.file_number.includes(search)
-      );
-    }
-
-    const getRankOrder = (rank: string, category: string) => {
-      if (category === 'ضابط') return OFFICER_RANK_ORDER[rank] ?? 99;
-      if (category === 'ضابط صف') return NCO_RANK_ORDER[rank] ?? 99;
-      return 99;
-    };
-
-    statsToSort.sort((a, b) => {
-      switch (sortBy) {
-        case 'rank':
-          const categoryComparison = (CATEGORY_ORDER[a.employee.category] ?? 99) - (CATEGORY_ORDER[b.employee.category] ?? 99);
-          if (categoryComparison !== 0) return categoryComparison;
-          return getRankOrder(a.employee.rank, a.employee.category) - getRankOrder(b.employee.rank, b.employee.category);
-        case 'total':
-          return b.total - a.total;
-        case 'name':
-          return a.employee.full_name.localeCompare(b.employee.full_name);
-        default:
-          return 0;
+  // Get unique employees for employee selector
+  const uniqueEmployees = useMemo(() => {
+    const employeeMap = new Map();
+    licenses.forEach(license => {
+      if (license.employee && !employeeMap.has(license.employee.id)) {
+        employeeMap.set(license.employee.id, license.employee);
       }
     });
+    return Array.from(employeeMap.values()).sort((a: Employee, b: Employee) =>
+      a.full_name.localeCompare(b.full_name, 'ar')
+    );
+  }, [licenses]);
 
-    return statsToSort;
-  }, [statsByEmployeeAndMonth, sortBy, search, selectedEmployees, dateRange, applyDateRangeFilter]);
-
-  const applyCurrentMonthFilter = () => {
-    const defaults = getCurrentMonthDefaults();
-    setFilters({
-      year: defaults.year,
-      months: defaults.months
-    } as any);
-    setSearch('');
-    setSelectedEmployees([]);
-    setDateRange({
-      startDate: defaults.startDate,
-      endDate: defaults.endDate
+  // Get unique years and months
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    licenses.forEach(license => {
+      years.add(new Date(license.license_date).getFullYear().toString());
     });
+    return Array.from(years).sort((a, b) => parseInt(b) - parseInt(a));
+  }, [licenses]);
+
+  const availableMonths = [
+    { value: '1', label: 'يناير' },
+    { value: '2', label: 'فبراير' },
+    { value: '3', label: 'مارس' },
+    { value: '4', label: 'أبريل' },
+    { value: '5', label: 'مايو' },
+    { value: '6', label: 'يونيو' },
+    { value: '7', label: 'يوليو' },
+    { value: '8', label: 'أغسطس' },
+    { value: '9', label: 'سبتمبر' },
+    { value: '10', label: 'أكتوبر' },
+    { value: '11', label: 'نوفمبر' },
+    { value: '12', label: 'ديسمبر' }
+  ];
+
+  // Generate report title and subtitle based on filters
+  const generateReportInfo = () => {
+    let title = 'تقرير متابعة موظفي إدارة السجل العام';
+    let subtitle = '';
+    let monthsText = '';
+    let categoriesText = '';
+
+    // Add year to title if selected
+    if (reportConfig.selectedYear) {
+      title += ` لسنة ${reportConfig.selectedYear}`;
+    }
+
+    // Add months subtitle if selected
+    if (reportConfig.selectedMonths.length > 0) {
+      if (reportConfig.selectedMonths.length === 1) {
+        const monthName = availableMonths.find(m => m.value === reportConfig.selectedMonths[0])?.label;
+        monthsText = `لشهر ${monthName}`;
+      } else if (reportConfig.selectedMonths.length === 12) {
+        monthsText = 'لجميع أشهر السنة';
+      } else {
+        const monthNames = reportConfig.selectedMonths
+          .map(m => availableMonths.find(month => month.value === m)?.label)
+          .join(' و ');
+        monthsText = `لأشهر ${monthNames}`;
+      }
+    }
+
+    // Add categories if selected
+    if (reportConfig.categories.length > 0) {
+      if (reportConfig.categories.length === 1) {
+        const category = reportConfig.categories[0];
+        if (category === 'ضابط') categoriesText = '( ضباط )';
+        else if (category === 'ضابط صف') categoriesText = '( ضباط صف )';
+        else if (category === 'مهني') categoriesText = '( مهنيين )';
+        else if (category === 'مدني') categoriesText = '( مدنيين )';
+        else categoriesText = `( ${category} )`;
+      } else {
+        const categoryNames = reportConfig.categories.map(cat => {
+          if (cat === 'ضابط') return 'ضباط';
+          if (cat === 'ضابط صف') return 'ضباط صف';
+          if (cat === 'مهني') return 'مهنيين';
+          if (cat === 'مدني') return 'مدنيين';
+          return cat;
+        }).join(' / ');
+        categoriesText = `( ${categoryNames} )`;
+      }
+    }
+
+    // Combine subtitle parts
+    const subtitleParts = [monthsText, categoriesText].filter(Boolean);
+    subtitle = subtitleParts.join(' ');
+
+    return { title, subtitle };
   };
 
-  const clearFilters = () => {
-    setFilters({});
-    setSearch('');
-    setSelectedEmployees([]);
-    setDateRange({
-      startDate: '',
-      endDate: ''
-    });
-  };
+  // Handle print for custom reports
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    if (!printWindow) return;
 
-  // Generate professional report title matching the document
-  const generateReportTitle = () => {
-    const currentYear = new Date().getFullYear();
-    let year = currentYear.toString();
-    let dateRangeText = '';
-    let categoryText = '';
+    const { title: reportTitle, subtitle } = generateReportInfo();
 
-    // Determine year from filters or date range
-    if (filters.year) {
-      year = filters.year;
-    } else if (dateRange.startDate) {
-      year = new Date(dateRange.startDate).getFullYear().toString();
-    }
+    const printContent = `
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>تقرير الطباعة</title>
+        <style>
+          @page {
+            size: A4;
+            margin: 4.5cm 1.75cm 0.5cm 1.75cm;
+            orientation: portrait;
+          }
 
-    // Generate date range text
-    if (dateRange.startDate && dateRange.endDate) {
-      const startDate = new Date(dateRange.startDate);
-      const endDate = new Date(dateRange.endDate);
-      dateRangeText = `من تاريخ ${startDate.toLocaleDateString('en-US')} إلى تاريخ ${endDate.toLocaleDateString('en-US')}`;
-    } else if ((filters as any).months && (filters as any).months.length > 0) {
-      const monthNames = ['', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
-                         'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-      const selectedMonths = (filters as any).months.map((m: number) => monthNames[m]).join(' - ');
-      dateRangeText = `شهر ${selectedMonths}`;
-    }
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
 
-    // Generate category text
-    if ((filters as any).categories && (filters as any).categories.length > 0) {
-      categoryText = `( ${(filters as any).categories.join(' / ')} )`;
-    }
+          body {
+            font-family: 'Sultan Normal', 'Times New Roman', serif;
+            font-size: 12pt;
+            line-height: 1.4;
+            color: #000;
+            background: white;
+            padding: 20px;
+            direction: rtl;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+          }
 
-    return {
-      title: `تقرير متابعة موظفي إدارة السجل العام لسنة ${year}`,
-      dateRange: dateRangeText,
-      categories: categoryText
-    };
-  };
+          .report-header {
+            text-align: center;
+            margin-bottom: 40px;
+            flex: 0 0 auto;
+            padding: 80px 0 40px 0;
+          }
 
-  const exportData = () => {
-    if (professionalReportData.length === 0) {
-      alert('لا توجد بيانات لتصديرها.');
-      return;
-    }
+          .content-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+          }
 
-    const reportTitle = generateReportTitle();
-    const csvContent = [
-      // Report title
-      [reportTitle.title].join(','),
-      [reportTitle.dateRange].join(','),
-      [reportTitle.categories].join(','),
-      [''].join(','), // Empty line
-      // Headers
-      ['م', 'الرتبة', 'اسم الموظف', 'يوم كامل', 'نصف يوم'].join(','),
-      // Data
-      ...professionalReportData.map((data, index) => [
-        index + 1,
-        data.employee.category === 'ضابط' || data.employee.category === 'ضابط صف'
-          ? data.employee.rank
-          : data.employee.category,
-        data.employee.full_name,
-        data.fullDays || 0,
-        data.halfDays || 0
-      ].join(','))
-    ].join('\n');
+          .report-title {
+            font-family: 'Sultan Bold', 'Times New Roman', serif;
+            font-size: 22pt;
+            font-weight: normal;
+            text-decoration: none;
+            text-align: center;
+            margin-bottom: 10px;
+            color: #000;
+          }
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `تقرير_متابعة_الموظفين_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+          .report-date {
+            font-family: 'Sultan Normal', 'Times New Roman', serif;
+            font-size: 18pt;
+            color: #000;
+            text-align: center;
+            margin-bottom: 5px;
+            font-weight: bold;
+          }
 
-  const generatePdfDocument = (action: 'save' | 'print') => {
-    console.log('SultanBold Font Object:', SultanBold);
-    console.log('TimesBold Font Object:', TimesBold);
-    if (professionalReportData.length === 0) {
-      alert('لا توجد بيانات لتصديرها.');
-      return;
-    }
-    const doc = new jsPDF('landscape');
-    doc.addFileToVFS('Sultan-bold-normal.ttf', SultanBold.default);
-    doc.addFont('Sultan-bold-normal.ttf', 'Sultan-bold', 'normal');
-    doc.addFileToVFS('Times-New-Roman-bold.ttf', TimesBold.default);
-    doc.addFont('Times-New-Roman-bold.ttf', 'Times-bold', 'normal');
+          .report-categories {
+            font-family: 'Sultan Bold', 'Times New Roman', serif;
+            font-size: 18pt;
+            color: #ff0000;
+            margin-bottom: 5px;
+          }
 
-    doc.setFont('Sultan-bold');
-    doc.setFontSize(16);
+          table {
+            width: 100%;
+            margin: 0px auto;
+            direction: rtl;
+          }
 
-    const reportTitleData = generateReportTitle();
+          th, td {
+            border: 1px solid #000;
+            padding: 8px;
+            text-align: center;
+            vertical-align: top;
+            font-family: 'Sultan Normal', 'Times New Roman', serif;
+            font-size: 17pt;
+          }
 
-    // Add title
-    doc.text(reportTitleData.title, doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
+          th {
+            background: #e8e8e8;
+            font-family: 'Sultan Bold', 'Times New Roman', serif;
+            font-size: 17pt;
+          }
 
-    // Add date range if available
-    if (reportTitleData.dateRange) {
-      doc.setFontSize(12);
-      doc.text(reportTitleData.dateRange, doc.internal.pageSize.getWidth() / 2, 25, { align: 'center' });
-    }
+          table, th, td {
+            border-width: 2px;
+            border-style: solid;
+            border-collapse: collapse;
+            border-color: #000;
+          }
 
-    // Add categories if available
-    if (reportTitleData.categories) {
-      doc.setFontSize(14);
-      doc.text(reportTitleData.categories, doc.internal.pageSize.getWidth() / 2, 35, { align: 'center' });
-    }
+          .number-cell {
+            font-weight: bold;
+          }
 
-    const tableColumn = ["م", "الرتبة", "اسم الموظف", "يوم كامل", "نصف يوم"];
-    const tableRows = professionalReportData.map((data, index) => ([
-      index + 1,
-      data.employee.category === 'ضابط' || data.employee.category === 'ضابط صف'
-        ? data.employee.rank
-        : data.employee.category,
-      data.employee.full_name,
-      data.fullDays || 0,
-      data.halfDays || 0
-    ]));
+          .employee-name {
+            text-align: center;
+            font-weight: normal;
+          }
 
-    (doc as any).autoTable({
-      head: [tableColumn.reverse()],
-      body: tableRows.map(row => row.reverse()),
-      startY: 25,
-      theme: 'grid',
-      styles: { font: 'Times-bold', halign: 'center', cellPadding: 2 },
-      headStyles: { fillColor: [41, 128, 185], font: 'Sultan-bold', halign: 'center' },
-      columnStyles: {
-        5: { font: 'Sultan-bold', halign: 'right' }, // Employee Name (after reverse)
-        6: { font: 'Sultan-bold', halign: 'right' }, // Rank (after reverse)
-      },
-    });
+          @media print {
+            body {
+              padding: 0;
+              margin: 0;
+            }
 
-    if (action === 'print') {
-      doc.output('dataurlnewwindow');
-    } else {
-      doc.save(`report_${filters.year}_${filters.month || 'all'}.pdf`);
-    }
-  };
+            .report-header {
+              padding-top: 0;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="content-wrapper">
+          <div class="report-header">
+            <h1 class="report-title">${reportTitle}</h1>
+            ${subtitle ? `<p class="report-categories">${subtitle}</p>` : ''}
+          </div>
 
-  const exportToWord = () => {
-    if (professionalReportData.length === 0) {
-      alert('لا توجد بيانات لتصديرها.');
-      return;
-    }
+          <table>
+          <thead class="background-color:#e8e8e8">
+            <tr>
+              <th>م</th>
+              <th>الرتبة</th>
+              <th>الاسم</th>
+              <th>استئذان طويل</th>
+              <th>استئذان قصير</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${reportData.map((item, index) => `
+              <tr>
+                <td>${index + 1}</td>
+                <td>${(item.employee.category === 'ضابط' || item.employee.category === 'ضابط صف') ? item.employee.rank : item.employee.category}</td>
+                <td class="employee-name">${item.employee.full_name}</td>
+                <td class="number-cell">${item.fullDays}</td>
+                <td class="number-cell">${item.halfDays}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        </div>
+      </body>
+      </html>
+    `;
 
-    const reportTitleData = generateReportTitle();
+    printWindow.document.documentElement.innerHTML = printContent;
 
-    const title = new Paragraph({
-      alignment: AlignmentType.CENTER,
-      children: [new TextRun({
-        text: reportTitleData.title,
-        font: "Sultan bold",
-        size: 42, // 21pt
-        bold: false,
-        underline: { type: UnderlineType.SINGLE, color: "000000" },
-        rightToLeft: true,
-      })],
-      spacing: { after: 200 },
-    });
-
-    const dateRangeParagraph = reportTitleData.dateRange ? new Paragraph({
-      alignment: AlignmentType.CENTER,
-      children: [new TextRun({
-        text: reportTitleData.dateRange,
-        font: "Sultan bold",
-        size: 32, // 16pt
-        bold: false,
-        rightToLeft: true,
-      })],
-      spacing: { after: 200 },
-    }) : null;
-
-    const categoriesParagraph = reportTitleData.categories ? new Paragraph({
-      alignment: AlignmentType.CENTER,
-      children: [new TextRun({
-        text: reportTitleData.categories,
-        font: "Sultan bold",
-        size: 36, // 18pt
-        bold: true,
-        rightToLeft: true,
-      })],
-      spacing: { after: 400 },
-    }) : null;
-
-    const createCell = (text: string | number, isHeader: boolean) => new TableCell({
-      children: [new Paragraph({
-        alignment: AlignmentType.CENTER,
-        children: [new TextRun({
-          text: String(text),
-          font: isHeader ? "Sultan bold" : "Times New Roman",
-          size: 26, // 13pt
-          bold: !isHeader,
-          rightToLeft: true,
-        })],
-      })],
-      verticalAlign: VerticalAlign.CENTER,
-      shading: isHeader ? { type: ShadingType.SOLID, color: 'E5E7EB', fill: 'E5E7EB' } : undefined,
-      borders: {
-        top: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-        bottom: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-        left: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-        right: { style: BorderStyle.SINGLE, size: 1, color: '000000' },
-      },
-    });
-
-    const tableHeader = new TableRow({
-      children: [
-        createCell('م', true),
-        createCell('الرتبة', true),
-        createCell('اسم الموظف', true),
-        createCell('يوم كامل', true),
-        createCell('نصف يوم', true),
-      ],
-      height: { value: 567, rule: HeightRule.EXACT }, // 1cm
-    });
-
-    const dataRows = professionalReportData.map((data, index) => new TableRow({
-      children: [
-        createCell(index + 1, false),
-        createCell(data.employee.category === 'ضابط' || data.employee.category === 'ضابط صف'
-          ? data.employee.rank
-          : data.employee.category, false),
-        createCell(data.employee.full_name, false),
-        createCell(data.fullDays || 0, false),
-        createCell(data.halfDays || 0, false),
-      ],
-      height: { value: 567, rule: HeightRule.EXACT }, // 1cm
-    }));
-
-    const table = new Table({
-      rows: [tableHeader, ...dataRows],
-      width: { size: 100, type: WidthType.PERCENTAGE },
-      visuallyRightToLeft: true,
-    });
-
-    const doc = new Document({
-      sections: [{
-        properties: {
-          page: {
-            margin: {
-              top: 720, right: 720, bottom: 720, left: 720, // 0.5 inch
-            },
-          },
-        },
-        children: [
-          title,
-          ...(dateRangeParagraph ? [dateRangeParagraph] : []),
-          ...(categoriesParagraph ? [categoriesParagraph] : []),
-          table
-        ],
-      }],
-    });
-
-    const reportTitleForFile = generateReportTitle();
-    const fileName = `${reportTitleForFile.title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.docx`;
-
-    Packer.toBlob(doc).then(blob => {
-      saveAs(blob, fileName);
-    });
-  };
-
-  const exportToPDF = () => generatePdfDocument('save');
-  const handlePrint = () => generatePdfDocument('print');
-
-  const customStyles = {
-    control: (base: any) => ({
-      ...base,
-      textAlign: 'right',
-      minHeight: '38px',
-      borderRadius: '0.5rem',
-      borderColor: '#D1D5DB',
-    }),
-    menu: (base: any) => ({
-      ...base,
-      textAlign: 'right',
-      zIndex: 9999,
-      borderRadius: '0.5rem',
-      position: 'absolute'
-    }),
-    menuPortal: (base: any) => ({
-      ...base,
-      zIndex: 9999
-    }),
-    placeholder: (base: any) => ({
-      ...base,
-      textAlign: 'right',
-      direction: 'rtl'
-    }),
-    singleValue: (base: any) => ({
-      ...base,
-      textAlign: 'right',
-      direction: 'rtl'
-    }),
-    multiValue: (base: any) => ({
-      ...base,
-      backgroundColor: '#E5E7EB',
-      direction: 'rtl'
-    }),
-    multiValueLabel: (base: any) => ({
-      ...base,
-      direction: 'rtl',
-      textAlign: 'right'
-    }),
-    option: (base: any) => ({
-      ...base,
-      textAlign: 'right',
-      direction: 'rtl'
-    })
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 1000);
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center py-10 bg-red-50 border border-red-200 rounded-lg p-8">
-          <p className="text-red-600 font-semibold text-lg">{error}</p>
-          <button onClick={loadData} className="mt-4 px-6 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-            إعادة المحاولة
-          </button>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">جاري تحميل البيانات...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-
-      {/* Search and Filters Section */}
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-        <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <Search className="w-5 h-5 text-blue-600" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-800">البحث والفلترة</h3>
-            </div>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
-                showFilters
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              <Filter className="w-4 h-4 inline-block ml-2" />
-              {showFilters ? 'إخفاء الفلاتر' : 'إظهار الفلاتر'}
-            </button>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="mx-auto">
+        {/* Header */}
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 mb-6">
+          <div className="px-8 py-6">
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">التقارير الشاملة</h1>
+            <p className="text-gray-600">إدارة ومتابعة تقارير الاستئذانات والحدود الشهرية</p>
           </div>
-        </div>
 
-        <div className="p-6">
-          {/* Search Bar */}
-          <div className="relative mb-6">
-            <input
-              type="text"
-              placeholder="ابحث بالاسم أو رقم الملف..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all duration-300"
-            />
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-          </div>
-          {/* Filters */}
-          {showFilters && (
-            <div className="space-y-6">
-              {/* Date Range Filter - Prominent */}
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 border-2 border-green-200">
-                <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-green-600" />
-                  فلترة بالتاريخ
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <DatePicker
-                    label="من تاريخ"
-                    value={dateRange.startDate}
-                    onChange={(date) => handleDateRangeChange('startDate', date)}
-                    placeholder="اختر تاريخ البداية"
-                    className="border-2 border-green-200 focus:ring-green-500 focus:border-green-500"
-                  />
-                  <DatePicker
-                    label="إلى تاريخ"
-                    value={dateRange.endDate}
-                    onChange={(date) => handleDateRangeChange('endDate', date)}
-                    placeholder="اختر تاريخ النهاية"
-                    minDate={dateRange.startDate}
-                    className="border-2 border-green-200 focus:ring-green-500 focus:border-green-500"
-                  />
-                </div>
-              </div>
-
-              {/* Other Filters */}
-              <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
-                <h4 className="text-lg font-bold text-gray-800 mb-4">فلاتر إضافية</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">السنة</label>
-                    <select
-                      value={filters.year || ''}
-                      onChange={(e) => handleFilterChange('year', e.target.value)}
-                      className="w-full h-12 px-4 py-3 bg-white border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                    >
-                      <option value="">جميع السنوات</option>
-                      {allYears.map(y => <option key={y} value={y}>{y}</option>)}
-                    </select>
+          {/* Tabs */}
+          <div className="px-8 py-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div
+                onClick={() => setActiveTab('monthly-limits')}
+                className={`cursor-pointer p-6 rounded-2xl border-2 transition-all duration-300 ${
+                  activeTab === 'monthly-limits'
+                    ? 'border-blue-500 bg-blue-50 shadow-lg transform scale-105'
+                    : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50 hover:shadow-md'
+                }`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`w-16 h-16 rounded-xl flex items-center justify-center ${
+                    activeTab === 'monthly-limits' ? 'bg-blue-600' : 'bg-blue-100'
+                  }`}>
+                    <Clock className={`w-8 h-8 ${
+                      activeTab === 'monthly-limits' ? 'text-white' : 'text-blue-600'
+                    }`} />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">الشهور</label>
-                    <div className="h-12">
-                      <Select
-                        isMulti
-                        options={Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: getMonthName(i) }))}
-                        value={(filters as any).months ? (filters as any).months.map((m: number) => ({ value: m, label: getMonthName(m - 1) })) : []}
-                        onChange={(newValue) => handleFilterChange('months', newValue ? newValue.map(v => v.value) : [])}
-                        placeholder="اختيار الشهور..."
-                        className="react-select-container"
-                        classNamePrefix="react-select"
-                        styles={{
-                          ...customStyles,
-                          control: (base: any) => ({
-                            ...customStyles.control(base),
-                            minHeight: '48px',
-                            height: '48px'
-                          })
-                        }}
-                        menuPortalTarget={document.body}
-                        menuPosition="fixed"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">الفئات</label>
-                    <div className="h-12">
-                      <Select
-                        isMulti
-                        options={Object.keys(CATEGORY_ORDER).map(cat => ({ value: cat, label: cat }))}
-                        value={(filters as any).categories ? (filters as any).categories.map((cat: string) => ({ value: cat, label: cat })) : []}
-                        onChange={(newValue) => handleFilterChange('categories', newValue ? newValue.map(v => v.value) : [])}
-                        placeholder="اختيار الفئات..."
-                        className="react-select-container"
-                        classNamePrefix="react-select"
-                        styles={{
-                          ...customStyles,
-                          control: (base: any) => ({
-                            ...customStyles.control(base),
-                            minHeight: '48px',
-                            height: '48px'
-                          })
-                        }}
-                        menuPortalTarget={document.body}
-                        menuPosition="fixed"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">نوع الرخصة</label>
-                    <select
-                      value={filters.license_type || ''}
-                      onChange={(e) => handleFilterChange('license_type', e.target.value)}
-                      className="w-full h-12 px-4 py-3 bg-white border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                    >
-                      <option value="">جميع الأنواع</option>
-                      <option value="يوم كامل">يوم كامل</option>
-                      <option value="نصف يوم">نصف يوم</option>
-                    </select>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">الموظفين</label>
-                    <div className="h-12">
-                      <Select
-                        isMulti
-                        options={selectableEmployees}
-                        value={selectedEmployees}
-                        onChange={(newValue) => setSelectedEmployees(newValue as any[])}
-                        placeholder="اختيار موظفين محددين..."
-                        className="react-select-container"
-                        classNamePrefix="react-select"
-                        styles={{
-                          ...customStyles,
-                          control: (base: any) => ({
-                            ...customStyles.control(base),
-                            minHeight: '48px',
-                            height: '48px'
-                          })
-                        }}
-                        menuPortalTarget={document.body}
-                        menuPosition="fixed"
-                      />
+                    <h3 className={`text-xl font-bold ${
+                      activeTab === 'monthly-limits' ? 'text-blue-700' : 'text-gray-800'
+                    }`}>
+                      الحدود الشهرية
+                    </h3>
+                    <p className="text-gray-600 mt-1">
+                      متابعة حدود الاستئذانات الشهرية للموظفين
+                    </p>
+                    <div className="flex gap-2 mt-3">
+                      <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-semibold flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        {calculateMonthlyStats.length} موظف
+                      </span>
+                      <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-semibold flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" />
+                        {calculateMonthlyStats.filter(s => s.isOverLimit).length} تجاوز
+                      </span>
                     </div>
                   </div>
                 </div>
+              </div>
 
-                <div className="mt-6 flex justify-center gap-4">
-                  <button
-                    onClick={applyCurrentMonthFilter}
-                    className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors duration-200 shadow-md hover:shadow-lg"
-                  >
-                    الشهر الحالي
-                  </button>
-                  <button
-                    onClick={clearFilters}
-                    className="px-6 py-3 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors duration-200 shadow-md hover:shadow-lg"
-                  >
-                    مسح الفلاتر
-                  </button>
+              <div
+                onClick={() => setActiveTab('custom-reports')}
+                className={`cursor-pointer p-6 rounded-2xl border-2 transition-all duration-300 ${
+                  activeTab === 'custom-reports'
+                    ? 'border-purple-500 bg-purple-50 shadow-lg transform scale-105'
+                    : 'border-gray-200 hover:border-purple-300 hover:bg-purple-50 hover:shadow-md'
+                }`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`w-16 h-16 rounded-xl flex items-center justify-center ${
+                    activeTab === 'custom-reports' ? 'bg-purple-600' : 'bg-purple-100'
+                  }`}>
+                    <FileText className={`w-8 h-8 ${
+                      activeTab === 'custom-reports' ? 'text-white' : 'text-purple-600'
+                    }`} />
+                  </div>
+                  <div>
+                    <h3 className={`text-xl font-bold ${
+                      activeTab === 'custom-reports' ? 'text-purple-700' : 'text-gray-800'
+                    }`}>
+                      التقارير المخصصة
+                    </h3>
+                    <p className="text-gray-600 mt-1">
+                      إنشاء تقارير مخصصة بمعايير متقدمة
+                    </p>
+                    <div className="flex gap-2 mt-3">
+                      <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs font-semibold flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        {reportData.length} موظف
+                      </span>
+                      <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-semibold flex items-center gap-1">
+                        <FileText className="w-3 h-3" />
+                        {filteredLicenses.length} رخصة
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-
-
-      {/* Professional Results Section */}
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-        <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                <FileText className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-white">نتائج التقرير</h3>
-                <p className="text-green-100 text-sm">عرض {professionalReportData.length} موظف</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="bg-white/20 px-3 py-1 rounded-lg">
-                <span className="text-white font-bold">{professionalReportData.length}</span>
-                <span className="text-green-100 text-sm mr-1">موظف</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-white text-sm font-medium">فرز:</label>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as 'rank' | 'total' | 'name')}
-                  className="px-3 py-1 rounded-lg text-sm bg-white/20 text-white border border-white/30 focus:outline-none focus:ring-2 focus:ring-white/50"
-                >
-                  <option value="rank" className="text-gray-800">الرتبة</option>
-                  <option value="total" className="text-gray-800">الإجمالي</option>
-                  <option value="name" className="text-gray-800">الاسم</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white text-sm font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
-                  onClick={exportData}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  CSV
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white text-sm font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
-                  onClick={exportToWord}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Word
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white text-sm font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
-                  onClick={exportToPDF}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
-                  PDF
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
-                  onClick={handlePrint}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                  </svg>
-                  طباعة
-                </button>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Professional Report Title */}
-        {professionalReportData.length > 0 && (
-          <div className="px-6 py-6 bg-gray-50 border-b border-gray-200">
-            <div className="text-center">
-              <h2 className="text-xl font-bold text-gray-800 mb-2">
-                {generateReportTitle().title}
-              </h2>
-              {generateReportTitle().dateRange && (
-                <p className="text-gray-600 mb-1">
-                  {generateReportTitle().dateRange}
-                </p>
-              )}
-              {generateReportTitle().categories && (
-                <p className="text-blue-600 font-semibold">
-                  {generateReportTitle().categories}
-                </p>
+        {/* Monthly Limits Card */}
+        {activeTab === 'monthly-limits' && (
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 mb-6">
+            <div className="px-8 py-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                    <Clock className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-800">الحدود الشهرية للاستئذانات</h2>
+                    <p className="text-sm text-gray-600">
+                      من بداية {MONTHLY_LIMITS_START_DATE.toLocaleDateString('ar-US')} - وما قبل ذلك لا يتبع الحدود الشهرية
+                    </p>
+                    <div className="flex gap-4 mt-2 text-xs">
+                      <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                        حد الاستئذانات الطويلة: {MONTHLY_LIMITS.FULL_DAY_LICENSES}
+                      </span>
+                      <span className="bg-green-100 text-green-800 px-2 py-1 rounded">
+                        حد الاستئذانات القصيرة: {MONTHLY_LIMITS.SHORT_LICENSES}
+                      </span>
+                      <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded">
+                        حد الساعات الشهرية: {MONTHLY_LIMITS.MAX_HOURS_PER_MONTH}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm text-gray-500">الشهر الحالي</div>
+                  <div className="text-lg font-bold text-blue-600">
+                    {new Date().toLocaleDateString('ar-US', { year: 'numeric', month: 'long' })}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-8">
+              {calculateMonthlyStats.length > 0 ? (
+                <>
+                  {/* Search for Monthly Limits */}
+                  <div className="mb-6">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="ابحث عن موظف بالاسم أو الرتبة..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full px-4 py-3 pl-12 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                      />
+                      <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    </div>
+                  </div>
+
+                  {/* Quick Stats */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    {(() => {
+                      const filteredStats = calculateMonthlyStats.filter(stat => {
+                        if (!searchTerm) return true;
+                        const searchLower = searchTerm.toLowerCase();
+                        return (
+                          stat.employee.full_name.toLowerCase().includes(searchLower) ||
+                          stat.employee.rank.toLowerCase().includes(searchLower) ||
+                          stat.employee.category.toLowerCase().includes(searchLower)
+                        );
+                      });
+
+                      return (
+                        <>
+                          <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+                            <div className="text-2xl font-bold text-blue-600">
+                              {filteredStats.filter(s => s.isOverLimit).length}
+                            </div>
+                            <div className="text-sm text-blue-700">موظفين تجاوزوا الحد</div>
+                          </div>
+                          <div className="bg-green-50 rounded-xl p-4 border border-green-200">
+                            <div className="text-2xl font-bold text-green-600">
+                              {filteredStats.filter(s => !s.isOverLimit && !s.isAtLimit).length}
+                            </div>
+                            <div className="text-sm text-green-700">موظفين ضمن الحد</div>
+                          </div>
+                          <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
+                            <div className="text-2xl font-bold text-yellow-600">
+                              {filteredStats.filter(s => s.isAtLimit && !s.isOverLimit).length}
+                            </div>
+                            <div className="text-sm text-yellow-700">موظفين وصلوا للحد</div>
+                          </div>
+                          <div className="bg-purple-50 rounded-xl p-4 border border-purple-200">
+                            <div className="text-2xl font-bold text-purple-600">
+                              {filteredStats.length}
+                            </div>
+                            <div className="text-sm text-purple-700">
+                              {searchTerm ? 'نتائج البحث' : 'إجمالي الموظفين'}
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
+                          <th className="text-right py-5 px-4 font-bold text-gray-800 border-r border-blue-200">الرتبة/الفئة</th>
+                          <th className="text-right py-5 px-4 font-bold text-gray-800 border-r border-blue-200">الاسم</th>
+                          <th className="text-center py-5 px-4 font-bold text-gray-800 border-r border-blue-200 min-w-32">
+                            <div className="flex flex-col items-center gap-1">
+                              <Clock className="w-5 h-5 text-blue-600" />
+                              <span>ساعات الاستئذانات</span>
+                              <span className="text-xs text-blue-600">القصيرة</span>
+                            </div>
+                          </th>
+                          <th className="text-center py-5 px-4 font-bold text-gray-800 border-r border-blue-200 min-w-32">
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center">
+                                <span className="text-white text-xs font-bold">½</span>
+                              </div>
+                              <span>استئذانات قصيرة</span>
+                            </div>
+                          </th>
+                          <th className="text-center py-5 px-4 font-bold text-gray-800 border-r border-blue-200 min-w-32">
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="w-5 h-5 bg-purple-500 rounded-full flex items-center justify-center">
+                                <span className="text-white text-xs font-bold">1</span>
+                              </div>
+                              <span>استئذانات طويلة</span>
+                            </div>
+                          </th>
+                          <th className="text-center py-5 px-4 font-bold text-gray-800 min-w-40">
+                            <div className="flex flex-col items-center gap-1">
+                              <CheckCircle className="w-5 h-5 text-green-600" />
+                              <span>الحالة</span>
+                            </div>
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {calculateMonthlyStats
+                          .filter(stat => {
+                            if (!searchTerm) return true;
+                            const searchLower = searchTerm.toLowerCase();
+                            return (
+                              stat.employee.full_name.toLowerCase().includes(searchLower) ||
+                              stat.employee.rank.toLowerCase().includes(searchLower) ||
+                              stat.employee.category.toLowerCase().includes(searchLower)
+                            );
+                          })
+                          .map((stat, index) => (
+                          <tr key={stat.employee.id} className={`hover:bg-blue-50 transition-colors duration-200 ${
+                            index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                          } ${stat.isOverLimit ? 'border-l-4 border-red-500' : stat.isAtLimit ? 'border-l-4 border-yellow-500' : 'border-l-4 border-green-500'}`}>
+                            <td className="py-6 px-4 border-r border-gray-100">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center font-bold text-blue-600 text-sm">
+                                  {index + 1}
+                                </div>
+                                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                  stat.employee.category === 'ضابط' ? 'bg-blue-100 text-blue-800' :
+                                  stat.employee.category === 'ضابط صف' ? 'bg-green-100 text-green-800' :
+                                  stat.employee.category === 'مهني' ? 'bg-purple-100 text-purple-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {stat.employee.category === 'ضابط' || stat.employee.category === 'ضابط صف'
+                                    ? stat.employee.rank
+                                    : stat.employee.category}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-6 px-4 font-bold text-gray-900 border-r border-gray-100">
+                              <div className="flex flex-col">
+                                <span className="text-lg">{stat.employee.full_name}</span>
+                                <span className="text-xs text-gray-500">رقم الملف: {stat.employee.file_number}</span>
+                              </div>
+                            </td>
+                            <td className="py-6 px-4 text-center border-r border-gray-100">
+                              <div className="flex flex-col items-center gap-2">
+                                {/* Progress Bar for Hours */}
+                                <div className="w-full max-w-20">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-lg font-bold text-gray-800">{stat.totalHours}</span>
+                                    <span className="text-xs text-gray-500">/{MONTHLY_LIMITS.MAX_HOURS_PER_MONTH}</span>
+                                  </div>
+                                  <div className="w-full bg-gray-200 rounded-full h-2">
+                                    <div
+                                      className={`h-2 rounded-full transition-all duration-300 ${
+                                        stat.totalHours > MONTHLY_LIMITS.MAX_HOURS_PER_MONTH
+                                          ? 'bg-red-500'
+                                          : stat.totalHours === MONTHLY_LIMITS.MAX_HOURS_PER_MONTH
+                                          ? 'bg-yellow-500'
+                                          : 'bg-blue-500'
+                                      }`}
+                                      style={{
+                                        width: `${Math.min((stat.totalHours / MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) * 100, 100)}%`
+                                      }}
+                                    ></div>
+                                  </div>
+                                  <div className="text-xs text-gray-500 mt-1">ساعة</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-6 px-4 text-center border-r border-gray-100">
+                              <div className="flex flex-col items-center gap-2">
+                                {/* Badge Style for Short Licenses */}
+                                <div className="relative">
+                                  <div className={`inline-flex items-center justify-center w-12 h-12 rounded-full text-lg font-bold ${
+                                    stat.shortLicenses > MONTHLY_LIMITS.SHORT_LICENSES
+                                      ? 'bg-red-100 text-red-700 border-2 border-red-300'
+                                      : stat.shortLicenses === MONTHLY_LIMITS.SHORT_LICENSES
+                                      ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300'
+                                      : 'bg-green-100 text-green-700 border-2 border-green-300'
+                                  }`}>
+                                    {stat.shortLicenses}
+                                  </div>
+                                  {stat.shortLicenses > 0 && (
+                                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-orange-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
+                                      {stat.shortLicenses}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-500">من {MONTHLY_LIMITS.SHORT_LICENSES}</div>
+                              </div>
+                            </td>
+                            <td className="py-6 px-4 text-center border-r border-gray-100">
+                              <div className="flex flex-col items-center gap-2">
+                                {/* Badge Style for Full Day Licenses */}
+                                <div className="relative">
+                                  <div className={`inline-flex items-center justify-center w-12 h-12 rounded-full text-lg font-bold ${
+                                    stat.fullDayLicenses > MONTHLY_LIMITS.FULL_DAY_LICENSES
+                                      ? 'bg-red-100 text-red-700 border-2 border-red-300'
+                                      : stat.fullDayLicenses === MONTHLY_LIMITS.FULL_DAY_LICENSES
+                                      ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300'
+                                      : 'bg-blue-100 text-blue-700 border-2 border-blue-300'
+                                  }`}>
+                                    {stat.fullDayLicenses}
+                                  </div>
+                                  {stat.fullDayLicenses > 0 && (
+                                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-purple-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
+                                      {stat.fullDayLicenses}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-500">من {MONTHLY_LIMITS.FULL_DAY_LICENSES}</div>
+                              </div>
+                            </td>
+                            <td className="py-6 px-4 text-center">
+                              <div className="flex flex-col items-center gap-2">
+                                {stat.isOverLimit ? (
+                                  <>
+                                    <div className="bg-red-100 border border-red-300 rounded-lg p-3 w-full max-w-32">
+                                      <div className="flex items-center justify-center gap-2 mb-2">
+                                        <AlertTriangle className="w-5 h-5 text-red-600" />
+                                        <span className="text-red-700 font-bold text-sm">تجاوز الحد</span>
+                                      </div>
+                                      <div className="space-y-1">
+                                        {stat.fullDayLicenses > MONTHLY_LIMITS.FULL_DAY_LICENSES && (
+                                          <div className="bg-red-200 rounded px-2 py-1">
+                                            <span className="text-red-800 text-xs font-semibold">طويلة: +{stat.fullDayLicenses - MONTHLY_LIMITS.FULL_DAY_LICENSES}</span>
+                                          </div>
+                                        )}
+                                        {stat.shortLicenses > MONTHLY_LIMITS.SHORT_LICENSES && (
+                                          <div className="bg-orange-200 rounded px-2 py-1">
+                                            <span className="text-orange-800 text-xs font-semibold">قصيرة: +{stat.shortLicenses - MONTHLY_LIMITS.SHORT_LICENSES}</span>
+                                          </div>
+                                        )}
+                                        {stat.totalHours > MONTHLY_LIMITS.MAX_HOURS_PER_MONTH && (
+                                          <div className="bg-red-200 rounded px-2 py-1">
+                                            <span className="text-red-800 text-xs font-semibold">ساعات: +{stat.totalHours - MONTHLY_LIMITS.MAX_HOURS_PER_MONTH}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </>
+                                ) : stat.isAtLimit ? (
+                                  <>
+                                    <div className="bg-yellow-100 border border-yellow-300 rounded-lg p-3 w-full max-w-32">
+                                      <div className="flex items-center justify-center gap-2 mb-2">
+                                        <Clock className="w-5 h-5 text-yellow-600" />
+                                        <span className="text-yellow-700 font-bold text-sm">وصل للحد</span>
+                                      </div>
+                                      <div className="space-y-1">
+                                        {stat.fullDayLicenses === MONTHLY_LIMITS.FULL_DAY_LICENSES && (
+                                          <div className="bg-yellow-200 rounded px-2 py-1">
+                                            <span className="text-yellow-800 text-xs font-semibold">طويلة: {MONTHLY_LIMITS.FULL_DAY_LICENSES}/{MONTHLY_LIMITS.FULL_DAY_LICENSES}</span>
+                                          </div>
+                                        )}
+                                        {stat.shortLicenses === MONTHLY_LIMITS.SHORT_LICENSES && (
+                                          <div className="bg-yellow-200 rounded px-2 py-1">
+                                            <span className="text-yellow-800 text-xs font-semibold">قصيرة: {MONTHLY_LIMITS.SHORT_LICENSES}/{MONTHLY_LIMITS.SHORT_LICENSES}</span>
+                                          </div>
+                                        )}
+                                        {stat.totalHours === MONTHLY_LIMITS.MAX_HOURS_PER_MONTH && (
+                                          <div className="bg-red-200 rounded px-2 py-1">
+                                            <span className="text-red-800 text-xs font-semibold">ساعات: {MONTHLY_LIMITS.MAX_HOURS_PER_MONTH}/{MONTHLY_LIMITS.MAX_HOURS_PER_MONTH}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div className="bg-green-100 border border-green-300 rounded-lg p-3 w-full max-w-32">
+                                    <div className="flex items-center justify-center gap-2 mb-2">
+                                      <CheckCircle className="w-5 h-5 text-green-600" />
+                                      <span className="text-green-700 font-bold text-sm">ضمن الحد</span>
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-1 text-xs">
+                                      <div className="text-green-700">
+                                        <span className="font-semibold">متبقي:</span>
+                                      </div>
+                                      <div className="text-green-600">
+                                        طويلة: {stat.remainingFullDays}
+                                      </div>
+                                      <div className="text-green-600">
+                                        قصيرة: {stat.remainingShortLicenses}
+                                      </div>
+                                      <div className="text-green-600">
+                                        ساعات: {stat.remainingHours}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+
+                    {/* No Results Message */}
+                    {calculateMonthlyStats.filter(stat => {
+                      if (!searchTerm) return true;
+                      const searchLower = searchTerm.toLowerCase();
+                      return (
+                        stat.employee.full_name.toLowerCase().includes(searchLower) ||
+                        stat.employee.rank.toLowerCase().includes(searchLower) ||
+                        stat.employee.category.toLowerCase().includes(searchLower)
+                      );
+                    }).length === 0 && searchTerm && (
+                      <div className="text-center py-8">
+                        <Search className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                        <h3 className="text-lg font-semibold text-gray-600 mb-2">لا توجد نتائج</h3>
+                        <p className="text-gray-500">لا يوجد موظفين يطابقون البحث "{searchTerm}"</p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-12">
+                  <Clock className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-600 mb-2">لا توجد بيانات للشهر الحالي</h3>
+                  <p className="text-gray-500">لم يتم تسجيل أي استئذانات هذا الشهر</p>
+                </div>
               )}
             </div>
           </div>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
-              <tr>
-                <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 border-b-2 border-gray-200">م</th>
-                <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 border-b-2 border-gray-200">الرتبة</th>
-                <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 border-b-2 border-gray-200">اسم الموظف</th>
-                <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 border-b-2 border-gray-200">يوم كامل</th>
-                <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 border-b-2 border-gray-200">نصف يوم</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {professionalReportData.length > 0 ? professionalReportData.map((data, index) => (
-                <tr key={data.employee.id} className="hover:bg-green-50 transition-colors duration-200 group">
-                  <td className="px-6 py-4 text-center text-sm text-gray-900">
-                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center font-bold text-green-600 group-hover:bg-green-200 mx-auto">
-                      {index + 1}
+        {/* Custom Reports Card */}
+        {activeTab === 'custom-reports' && (
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 mb-6">
+            <div className="px-8 py-6 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                  <FileText className="w-6 h-6 text-purple-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-800">التقارير المخصصة</h2>
+                  <p className="text-sm text-gray-600">إنشاء تقارير مخصصة بمعايير متقدمة</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Report Type Cards */}
+            <div className="px-8 py-6 border-b border-gray-200">
+              <label className="block text-sm font-semibold text-gray-700 mb-4">نوع التقرير</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <button
+                  onClick={() => setReportConfig(prev => ({ ...prev, reportType: 'multi' }))}
+                  className={`p-6 rounded-xl border-2 transition-all duration-200 ${
+                    reportConfig.reportType === 'multi'
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700 shadow-lg'
+                      : 'border-gray-200 hover:border-indigo-300 hover:bg-indigo-50'
+                  }`}
+                >
+                  <FileText className="w-8 h-8 mx-auto mb-3 text-indigo-600" />
+                  <div className="font-bold text-lg">تقرير شامل</div>
+                  <div className="text-sm text-gray-600 mt-1">معايير متعددة ومرونة كاملة</div>
+                </button>
+
+                <button
+                  onClick={() => setReportConfig(prev => ({ ...prev, reportType: 'yearly' }))}
+                  className={`p-6 rounded-xl border-2 transition-all duration-200 ${
+                    reportConfig.reportType === 'yearly'
+                      ? 'border-green-500 bg-green-50 text-green-700 shadow-lg'
+                      : 'border-gray-200 hover:border-green-300 hover:bg-green-50'
+                  }`}
+                >
+                  <Calendar className="w-8 h-8 mx-auto mb-3 text-green-600" />
+                  <div className="font-bold text-lg">تقرير سنوي</div>
+                  <div className="text-sm text-gray-600 mt-1">رخص سنة كاملة</div>
+                </button>
+
+                <button
+                  onClick={() => setReportConfig(prev => ({ ...prev, reportType: 'monthly' }))}
+                  className={`p-6 rounded-xl border-2 transition-all duration-200 ${
+                    reportConfig.reportType === 'monthly'
+                      ? 'border-orange-500 bg-orange-50 text-orange-700 shadow-lg'
+                      : 'border-gray-200 hover:border-orange-300 hover:bg-orange-50'
+                  }`}
+                >
+                  <Calendar className="w-8 h-8 mx-auto mb-3 text-orange-600" />
+                  <div className="font-bold text-lg">تقرير شهري</div>
+                  <div className="text-sm text-gray-600 mt-1">أشهر محددة</div>
+                </button>
+
+                <button
+                  onClick={() => setReportConfig(prev => ({ ...prev, reportType: 'employee' }))}
+                  className={`p-6 rounded-xl border-2 transition-all duration-200 ${
+                    reportConfig.reportType === 'employee'
+                      ? 'border-purple-500 bg-purple-50 text-purple-700 shadow-lg'
+                      : 'border-gray-200 hover:border-purple-300 hover:bg-purple-50'
+                  }`}
+                >
+                  <Users className="w-8 h-8 mx-auto mb-3 text-purple-600" />
+                  <div className="font-bold text-lg">تقرير موظفين</div>
+                  <div className="text-sm text-gray-600 mt-1">موظفين محددين</div>
+                </button>
+              </div>
+            </div>
+
+            {/* Dynamic Filters Based on Report Type */}
+            <div className="px-8 py-6 border-b border-gray-200">
+              <h3 className="text-lg font-bold text-gray-800 mb-4">الفلاتر والمعايير</h3>
+
+              {/* Common Search Filter */}
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-3">البحث</label>
+                <input
+                  type="text"
+                  placeholder="ابحث بالاسم أو الرتبة..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                />
+              </div>
+
+              {/* Yearly Report Filters */}
+              {reportConfig.reportType === 'yearly' && (
+                <div className="bg-green-50 rounded-xl p-6">
+                  <h4 className="text-lg font-bold text-green-800 mb-4 flex items-center gap-2">
+                    <Calendar className="w-5 h-5" />
+                    تقرير سنوي
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-3">
+                        السنة <span className="text-red-500">*</span>
+                      </label>
+                    <select
+                      value={reportConfig.selectedYear || ''}
+                      onChange={(e) => setReportConfig(prev => ({ ...prev, selectedYear: e.target.value || undefined }))}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                    >
+                      <option value="">اختر السنة</option>
+                      {availableYears.map(year => (
+                        <option key={year} value={year}>{year}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">الفئة</label>
+                    <select
+                      value={reportConfig.categories[0] || ''}
+                      onChange={(e) => setReportConfig(prev => ({
+                        ...prev,
+                        categories: e.target.value ? [e.target.value] : []
+                      }))}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                    >
+                      <option value="">جميع الفئات</option>
+                      <option value="ضابط">ضابط</option>
+                      <option value="ضابط صف">ضابط صف</option>
+                      <option value="مهني">مهني</option>
+                      <option value="مدني">مدني</option>
+                    </select>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 text-center text-sm font-medium text-gray-700">
-                    <span className="bg-gray-100 px-3 py-1 rounded-full text-xs font-semibold group-hover:bg-gray-200">
-                      {data.employee.category === 'ضابط' || data.employee.category === 'ضابط صف'
-                        ? data.employee.rank
-                        : data.employee.category}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-center text-sm font-bold text-gray-900">{data.employee.full_name}</td>
-                  <td className="px-6 py-4 text-center">
-                    <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-bold">
-                      {data.fullDays || '-'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-bold">
-                      {data.halfDays || '-'}
-                    </span>
-                  </td>
-                </tr>
-              )) : (
-                <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
-                    <div className="flex flex-col items-center gap-3">
-                      <FileText className="w-16 h-16 text-gray-300" />
-                      <p className="text-lg font-medium">لا توجد بيانات</p>
-                      <p className="text-sm">جرب تغيير الفلاتر للحصول على نتائج</p>
-                    </div>
-                  </td>
-                </tr>
+                  </div>
+                </div>
               )}
-            </tbody>
-          </table>
-        </div>
+
+              {/* Monthly Report Filters */}
+              {reportConfig.reportType === 'monthly' && (
+                <div className="bg-orange-50 rounded-xl p-6">
+                  <h4 className="text-lg font-bold text-orange-800 mb-4 flex items-center gap-2">
+                    <Calendar className="w-5 h-5" />
+                    تقرير شهري
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-3">
+                        السنة <span className="text-red-500">*</span>
+                      </label>
+                    <select
+                      value={reportConfig.selectedYear || ''}
+                      onChange={(e) => setReportConfig(prev => ({ ...prev, selectedYear: e.target.value || undefined }))}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                    >
+                      <option value="">اختر السنة</option>
+                      {availableYears.map(year => (
+                        <option key={year} value={year}>{year}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">الشهر *</label>
+                    <select
+                      value={reportConfig.selectedMonths[0] || ''}
+                      onChange={(e) => setReportConfig(prev => ({
+                        ...prev,
+                        selectedMonths: e.target.value ? [e.target.value] : []
+                      }))}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                    >
+                      <option value="">اختر الشهر</option>
+                      {availableMonths.map(month => (
+                        <option key={month.value} value={month.value}>{month.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">الفئة</label>
+                    <select
+                      value={reportConfig.categories[0] || ''}
+                      onChange={(e) => setReportConfig(prev => ({
+                        ...prev,
+                        categories: e.target.value ? [e.target.value] : []
+                      }))}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                    >
+                      <option value="">جميع الفئات</option>
+                      <option value="ضابط">ضابط</option>
+                      <option value="ضابط صف">ضابط صف</option>
+                      <option value="مهني">مهني</option>
+                      <option value="مدني">مدني</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Employee Report Filters */}
+              {reportConfig.reportType === 'employee' && (
+                <div className="bg-purple-50 rounded-xl p-6">
+                  <h4 className="text-lg font-bold text-purple-800 mb-4 flex items-center gap-2">
+                    <Users className="w-5 h-5" />
+                    تقرير موظفين
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-3">
+                        الموظفين <span className="text-red-500">*</span>
+                      </label>
+                      <div className="space-y-3">
+                        {/* Search Input */}
+                        <div className="relative">
+                          <input
+                            type="text"
+                            placeholder="ابحث عن موظف بالاسم أو الرتبة..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full px-4 py-3 pl-12 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                          />
+                          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        </div>
+
+                        {/* Selected Employees */}
+                        {reportConfig.selectedEmployees.length > 0 && (
+                          <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-semibold text-blue-800">
+                                الموظفين المحددين ({reportConfig.selectedEmployees.length})
+                              </span>
+                              <button
+                                onClick={() => setReportConfig(prev => ({ ...prev, selectedEmployees: [] }))}
+                                className="text-blue-600 hover:text-blue-800 text-xs"
+                              >
+                                مسح الكل
+                              </button>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {reportConfig.selectedEmployees.map(empId => {
+                                const emp = uniqueEmployees.find((e: Employee) => e.id.toString() === empId);
+                                return emp ? (
+                                  <div key={empId} className="bg-white px-3 py-1 rounded-full border border-blue-300 flex items-center gap-2">
+                                    <span className="text-sm text-blue-800">{emp.full_name}</span>
+                                    <button
+                                      onClick={() => {
+                                        setReportConfig(prev => ({
+                                          ...prev,
+                                          selectedEmployees: prev.selectedEmployees.filter(id => id !== empId)
+                                        }));
+                                      }}
+                                      className="text-blue-600 hover:text-blue-800"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ) : null;
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Employee List */}
+                        <div className="border-2 border-gray-200 rounded-xl max-h-40 overflow-y-auto">
+                          {uniqueEmployees
+                            .filter((emp: Employee) => {
+                              if (!searchTerm) return true;
+                              const searchLower = searchTerm.toLowerCase();
+                              return (
+                                emp.full_name.toLowerCase().includes(searchLower) ||
+                                emp.rank.toLowerCase().includes(searchLower) ||
+                                emp.category.toLowerCase().includes(searchLower)
+                              );
+                            })
+                            .map((emp: Employee) => {
+                              const isSelected = reportConfig.selectedEmployees.includes(emp.id.toString());
+                              return (
+                                <div
+                                  key={emp.id}
+                                  onClick={() => {
+                                    if (isSelected) {
+                                      setReportConfig(prev => ({
+                                        ...prev,
+                                        selectedEmployees: prev.selectedEmployees.filter(id => id !== emp.id.toString())
+                                      }));
+                                    } else {
+                                      setReportConfig(prev => ({
+                                        ...prev,
+                                        selectedEmployees: [...prev.selectedEmployees, emp.id.toString()]
+                                      }));
+                                    }
+                                  }}
+                                  className={`p-3 border-b border-gray-100 cursor-pointer transition-colors duration-200 ${
+                                    isSelected
+                                      ? 'bg-blue-50 border-blue-200'
+                                      : 'hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <div className="font-medium text-gray-900">{emp.full_name}</div>
+                                      <div className="text-sm text-gray-600">{emp.rank} - {emp.category}</div>
+                                    </div>
+                                    {isSelected && (
+                                      <CheckCircle className="w-5 h-5 text-blue-600" />
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          {uniqueEmployees.filter((emp: Employee) => {
+                            if (!searchTerm) return true;
+                            const searchLower = searchTerm.toLowerCase();
+                            return (
+                              emp.full_name.toLowerCase().includes(searchLower) ||
+                              emp.rank.toLowerCase().includes(searchLower) ||
+                              emp.category.toLowerCase().includes(searchLower)
+                            );
+                          }).length === 0 && (
+                            <div className="p-4 text-center text-gray-500">
+                              لا توجد نتائج للبحث
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">الفئة</label>
+                    <select
+                      value={reportConfig.categories[0] || ''}
+                      onChange={(e) => setReportConfig(prev => ({
+                        ...prev,
+                        categories: e.target.value ? [e.target.value] : []
+                      }))}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                    >
+                      <option value="">جميع الفئات</option>
+                      <option value="ضابط">ضابط</option>
+                      <option value="ضابط صف">ضابط صف</option>
+                      <option value="مهني">مهني</option>
+                      <option value="مدني">مدني</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Multi (Comprehensive) Report Filters */}
+              {reportConfig.reportType === 'multi' && (
+                <div className="space-y-6">
+                  {/* Time Period Section */}
+                  <div className="bg-blue-50 rounded-xl p-6">
+                    <h4 className="text-lg font-bold text-blue-800 mb-4 flex items-center gap-2">
+                      <Calendar className="w-5 h-5" />
+                      الفترة الزمنية
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-3">السنة</label>
+                        <select
+                          value={reportConfig.selectedYear || ''}
+                          onChange={(e) => setReportConfig(prev => ({ ...prev, selectedYear: e.target.value || undefined }))}
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                        >
+                          <option value="">جميع السنوات</option>
+                          {availableYears.map(year => (
+                            <option key={year} value={year}>{year}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-3">الأشهر</label>
+                        <select
+                          multiple
+                          value={reportConfig.selectedMonths}
+                          onChange={(e) => {
+                            const selectedValues = Array.from(e.target.selectedOptions, option => option.value);
+                            setReportConfig(prev => ({ ...prev, selectedMonths: selectedValues }));
+                          }}
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white h-32"
+                        >
+                          {availableMonths.map(month => (
+                            <option key={month.value} value={month.value}>{month.label}</option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-gray-500 mt-1">اضغط Ctrl للاختيار المتعدد</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Employees and Categories Section */}
+                  <div className="bg-purple-50 rounded-xl p-6">
+                    <h4 className="text-lg font-bold text-purple-800 mb-4 flex items-center gap-2">
+                      <Users className="w-5 h-5" />
+                      الموظفين والفئات
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-3">الموظفين</label>
+                        <div className="space-y-3">
+                          {/* Search Input */}
+                          <div className="relative">
+                            <input
+                              type="text"
+                              placeholder="ابحث عن موظف بالاسم أو الرتبة..."
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                              className="w-full px-4 py-3 pl-12 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+                            />
+                            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                          </div>
+
+                          {/* Selected Employees */}
+                          {reportConfig.selectedEmployees.length > 0 && (
+                            <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-semibold text-purple-800">
+                                  الموظفين المحددين ({reportConfig.selectedEmployees.length})
+                                </span>
+                                <button
+                                  onClick={() => setReportConfig(prev => ({ ...prev, selectedEmployees: [] }))}
+                                  className="text-purple-600 hover:text-purple-800 text-xs"
+                                >
+                                  مسح الكل
+                                </button>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {reportConfig.selectedEmployees.map(empId => {
+                                  const emp = uniqueEmployees.find((e: Employee) => e.id.toString() === empId);
+                                  return emp ? (
+                                    <div key={empId} className="bg-white px-3 py-1 rounded-full border border-purple-300 flex items-center gap-2">
+                                      <span className="text-sm text-purple-800">{emp.full_name}</span>
+                                      <button
+                                        onClick={() => {
+                                          setReportConfig(prev => ({
+                                            ...prev,
+                                            selectedEmployees: prev.selectedEmployees.filter(id => id !== empId)
+                                          }));
+                                        }}
+                                        className="text-purple-600 hover:text-purple-800"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ) : null;
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Employee List */}
+                          <div className="border-2 border-gray-200 rounded-xl max-h-32 overflow-y-auto">
+                            {uniqueEmployees
+                              .filter((emp: Employee) => {
+                                if (!searchTerm) return true;
+                                const searchLower = searchTerm.toLowerCase();
+                                return (
+                                  emp.full_name.toLowerCase().includes(searchLower) ||
+                                  emp.rank.toLowerCase().includes(searchLower) ||
+                                  emp.category.toLowerCase().includes(searchLower)
+                                );
+                              })
+                              .map((emp: Employee) => {
+                                const isSelected = reportConfig.selectedEmployees.includes(emp.id.toString());
+                                return (
+                                  <div
+                                    key={emp.id}
+                                    onClick={() => {
+                                      if (isSelected) {
+                                        setReportConfig(prev => ({
+                                          ...prev,
+                                          selectedEmployees: prev.selectedEmployees.filter(id => id !== emp.id.toString())
+                                        }));
+                                      } else {
+                                        setReportConfig(prev => ({
+                                          ...prev,
+                                          selectedEmployees: [...prev.selectedEmployees, emp.id.toString()]
+                                        }));
+                                      }
+                                    }}
+                                    className={`p-2 border-b border-gray-100 cursor-pointer transition-colors duration-200 ${
+                                      isSelected
+                                        ? 'bg-purple-50 border-purple-200'
+                                        : 'hover:bg-gray-50'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <div className="font-medium text-gray-900 text-sm">{emp.full_name}</div>
+                                        <div className="text-xs text-gray-600">{emp.rank}</div>
+                                      </div>
+                                      {isSelected && (
+                                        <CheckCircle className="w-4 h-4 text-purple-600" />
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            {uniqueEmployees.filter((emp: Employee) => {
+                              if (!searchTerm) return true;
+                              const searchLower = searchTerm.toLowerCase();
+                              return (
+                                emp.full_name.toLowerCase().includes(searchLower) ||
+                                emp.rank.toLowerCase().includes(searchLower) ||
+                                emp.category.toLowerCase().includes(searchLower)
+                              );
+                            }).length === 0 && (
+                              <div className="p-4 text-center text-gray-500 text-sm">
+                                لا توجد نتائج للبحث
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-3">الفئات</label>
+                        <select
+                          multiple
+                          value={reportConfig.categories}
+                          onChange={(e) => {
+                            const selectedValues = Array.from(e.target.selectedOptions, option => option.value);
+                            setReportConfig(prev => ({ ...prev, categories: selectedValues }));
+                          }}
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white h-32"
+                        >
+                          <option value="ضابط">ضابط</option>
+                          <option value="ضابط صف">ضابط صف</option>
+                          <option value="مهني">مهني</option>
+                          <option value="مدني">مدني</option>
+                        </select>
+                        <p className="text-xs text-gray-500 mt-1">اضغط Ctrl للاختيار المتعدد</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="px-8 py-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800">إجراءات التقرير</h3>
+                  <p className="text-sm text-gray-600">طباعة وتصدير التقرير</p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handlePrint}
+                    disabled={reportData.length === 0}
+                    className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors duration-200 shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    <Printer className="w-5 h-5" />
+                    طباعة التقرير
+                  </button>
+                  <button
+                    disabled={reportData.length === 0}
+                    className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors duration-200 shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    <FileText className="w-5 h-5" />
+                    تصدير Word
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Results Table */}
+            <div className="p-8">
+              {reportData.length > 0 ? (
+                <>
+                  {/* Report Summary */}
+                  <div className="mb-6 p-4 bg-gray-50 rounded-xl">
+                    <h3 className="text-lg font-bold text-gray-800 mb-2">ملخص التقرير</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-600">إجمالي الموظفين:</span>
+                        <span className="font-bold text-blue-600 mr-2">{reportData.length}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">إجمالي الاستئذانات:</span>
+                        <span className="font-bold text-green-600 mr-2">
+                          {reportData.reduce((sum, emp) => sum + emp.fullDays + emp.halfDays, 0)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">استئذانات طويلة:</span>
+                        <span className="font-bold text-purple-600 mr-2">
+                          {reportData.reduce((sum, emp) => sum + emp.fullDays, 0)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">استئذانات قصيرة:</span>
+                        <span className="font-bold text-orange-600 mr-2">
+                          {reportData.reduce((sum, emp) => sum + emp.halfDays, 0)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Data Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b-2 border-gray-200">
+                          <th className="text-right py-4 px-4 font-bold text-gray-700">م</th>
+                          <th className="text-right py-4 px-4 font-bold text-gray-700">الرتبة/الفئة</th>
+                          <th className="text-right py-4 px-4 font-bold text-gray-700">الاسم</th>
+                          <th className="text-center py-4 px-4 font-bold text-gray-700">رقم الملف</th>
+                          <th className="text-center py-4 px-4 font-bold text-gray-700">استئذانات طويلة</th>
+                          <th className="text-center py-4 px-4 font-bold text-gray-700">استئذانات قصيرة</th>
+                          <th className="text-center py-4 px-4 font-bold text-gray-700">إجمالي الساعات</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {reportData.map((item, index) => (
+                          <tr key={item.employee.id} className="hover:bg-gray-50">
+                            <td className="py-4 px-4 text-center">
+                              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center font-bold text-blue-600">
+                                {index + 1}
+                              </div>
+                            </td>
+                            <td className="py-4 px-4">
+                              <span className="bg-gray-100 px-3 py-1 rounded-full text-xs font-semibold">
+                                {item.employee.category === 'ضابط' || item.employee.category === 'ضابط صف'
+                                  ? item.employee.rank
+                                  : item.employee.category}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4 font-medium text-gray-900">{item.employee.full_name}</td>
+                            <td className="py-4 px-4 text-center text-gray-700">{item.employee.file_number}</td>
+                            <td className="py-4 px-4 text-center">
+                              <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-bold">
+                                {item.fullDays}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <span className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-bold">
+                                {item.halfDays}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-bold">
+                                {item.totalHours} ساعة
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-12">
+                  <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-600 mb-2">لا توجد نتائج</h3>
+                  <p className="text-gray-500">لا توجد بيانات تطابق المعايير المحددة</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

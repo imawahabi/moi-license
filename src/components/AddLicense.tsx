@@ -5,6 +5,13 @@ import { EmployeeService } from '../services/employeeService';
 import { Employee, License } from '../types';
 import DatePicker from './DatePicker';
 
+// Constants for monthly limits
+const MONTHLY_LIMITS = {
+  FULL_DAY_LICENSES: 3,
+  SHORT_LICENSES: 4,
+  MAX_HOURS_PER_MONTH: 12
+};
+
 
 
 interface LicenseConfig {
@@ -28,10 +35,12 @@ interface AddLicenseProps {
 
 const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [licenses, setLicenses] = useState<License[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentStep, setCurrentStep] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [duplicateWarning, setDuplicateWarning] = useState<License[] | null>(null);
+  const [monthlyLimitWarning, setMonthlyLimitWarning] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'warning', text: string } | null>(null);
 
   const [licenseConfig, setLicenseConfig] = useState<LicenseConfig>({
@@ -44,19 +53,23 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
 
 
   useEffect(() => {
-    const loadEmployees = async () => {
+    const loadData = async () => {
       try {
         setLoading(true);
-        const data = await EmployeeService.getAll();
-        setEmployees(data);
+        const [employeesData, licensesData] = await Promise.all([
+          EmployeeService.getAll(),
+          LicenseService.getAll()
+        ]);
+        setEmployees(employeesData);
+        setLicenses(licensesData);
       } catch (error) {
-        console.error('Error loading employees:', error);
-        setMessage({ type: 'error', text: 'فشل في تحميل قائمة الموظفين' });
+        console.error('Error loading data:', error);
+        setMessage({ type: 'error', text: 'فشل في تحميل البيانات' });
       } finally {
         setLoading(false);
       }
     };
-    loadEmployees();
+    loadData();
   }, []);
 
   const filteredEmployees = useMemo(() => {
@@ -68,6 +81,47 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
       emp.category.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [employees, searchQuery]);
+
+  // Calculate monthly limits for selected employee
+  const calculateEmployeeMonthlyStats = useMemo(() => {
+    if (!licenseConfig.selectedEmployee || !licenseConfig.licenseDate) {
+      return null;
+    }
+
+    const currentDate = licenseConfig.licenseDate;
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth() + 1;
+
+    const employeeLicenses = licenses.filter(license => {
+      if (!license.employee || license.employee.id !== licenseConfig.selectedEmployee!.id) return false;
+
+      const licenseDate = new Date(license.license_date);
+      return licenseDate.getFullYear() === currentYear &&
+             licenseDate.getMonth() + 1 === currentMonth;
+    });
+
+    let fullDayLicenses = 0;
+    let shortLicenses = 0;
+    let totalHours = 0;
+
+    employeeLicenses.forEach(license => {
+      if (license.hours && license.hours > 0) {
+        shortLicenses++;
+        totalHours += license.hours;
+      } else {
+        fullDayLicenses++;
+      }
+    });
+
+    return {
+      fullDayLicenses,
+      shortLicenses,
+      totalHours,
+      remainingFullDays: Math.max(0, MONTHLY_LIMITS.FULL_DAY_LICENSES - fullDayLicenses),
+      remainingShortLicenses: Math.max(0, MONTHLY_LIMITS.SHORT_LICENSES - shortLicenses),
+      remainingHours: Math.max(0, MONTHLY_LIMITS.MAX_HOURS_PER_MONTH - totalHours)
+    };
+  }, [licenseConfig.selectedEmployee, licenseConfig.licenseDate, licenses]);
 
   useEffect(() => {
     const checkDuplicates = async () => {
@@ -85,6 +139,71 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
     };
     checkDuplicates();
   }, [licenseConfig.selectedEmployee, licenseConfig.licenseDate]);
+
+  // Check monthly limits
+  useEffect(() => {
+    if (!calculateEmployeeMonthlyStats) {
+      setMonthlyLimitWarning(null);
+      return;
+    }
+
+    const stats = calculateEmployeeMonthlyStats;
+    const warnings: string[] = [];
+
+    if (licenseConfig.licenseType === 'يوم كامل') {
+      if (stats.remainingFullDays < 0) {
+        warnings.push(`تم تجاوز الحد الأقصى للاستئذانات الطويلة هذا الشهر (${MONTHLY_LIMITS.FULL_DAY_LICENSES} استئذانات)`);
+      } else if (stats.remainingFullDays === 0) {
+        warnings.push(`وصل للحد الأقصى للاستئذانات الطويلة هذا الشهر (${MONTHLY_LIMITS.FULL_DAY_LICENSES} استئذانات)`);
+      } else if (stats.remainingFullDays === 1) {
+        warnings.push(`تحذير: متبقي استئذان طويل واحد فقط هذا الشهر`);
+      }
+    } else if (licenseConfig.licenseType === 'نصف يوم' && licenseConfig.hours) {
+      // Check short licenses count
+      if (stats.remainingShortLicenses < 0) {
+        warnings.push(`تم تجاوز الحد الأقصى للاستئذانات القصيرة هذا الشهر (${MONTHLY_LIMITS.SHORT_LICENSES} استئذانات)`);
+      } else if (stats.remainingShortLicenses === 0) {
+        warnings.push(`وصل للحد الأقصى للاستئذانات القصيرة هذا الشهر (${MONTHLY_LIMITS.SHORT_LICENSES} استئذانات)`);
+      }
+
+      // Check hours limit
+      const newTotalHours = stats.totalHours + licenseConfig.hours;
+      if (newTotalHours > MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) {
+        const exceededHours = newTotalHours - MONTHLY_LIMITS.MAX_HOURS_PER_MONTH;
+        warnings.push(`تجاوز الحد الأقصى للساعات الشهرية بـ ${exceededHours} ساعة (الحد الأقصى: ${MONTHLY_LIMITS.MAX_HOURS_PER_MONTH} ساعة)`);
+      } else if (newTotalHours === MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) {
+        warnings.push(`وصل للحد الأقصى للساعات الشهرية (${MONTHLY_LIMITS.MAX_HOURS_PER_MONTH} ساعة)`);
+      } else if (stats.remainingHours < licenseConfig.hours) {
+        warnings.push(`تحذير: متبقي ${stats.remainingHours} ساعة فقط من الحد الشهري`);
+      }
+
+      if (stats.remainingShortLicenses === 1) {
+        warnings.push(`تحذير: متبقي استئذان قصير واحد فقط هذا الشهر`);
+      }
+    }
+
+    setMonthlyLimitWarning(warnings.length > 0 ? warnings.join('\n') : null);
+  }, [calculateEmployeeMonthlyStats, licenseConfig.licenseType, licenseConfig.hours]);
+
+  // Check if there are critical monthly limit violations
+  const hasCriticalLimitViolation = useMemo(() => {
+    if (!calculateEmployeeMonthlyStats) return false;
+
+    const stats = calculateEmployeeMonthlyStats;
+
+    if (licenseConfig.licenseType === 'يوم كامل' && stats.remainingFullDays <= 0) {
+      return true;
+    }
+
+    if (licenseConfig.licenseType === 'نصف يوم' && licenseConfig.hours) {
+      if (stats.remainingShortLicenses <= 0) return true;
+
+      const newTotalHours = stats.totalHours + licenseConfig.hours;
+      if (newTotalHours >= MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) return true;
+    }
+
+    return false;
+  }, [calculateEmployeeMonthlyStats, licenseConfig.licenseType, licenseConfig.hours]);
 
   const steps: LicenseStep[] = [
     {
@@ -111,6 +230,38 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
         text: 'لا يمكن المتابعة. يوجد رخصة مكررة للموظف في نفس التاريخ.'
       });
       return;
+    }
+
+    // فحص الحدود الشهرية الحرجة
+    if (calculateEmployeeMonthlyStats) {
+      const stats = calculateEmployeeMonthlyStats;
+
+      if (licenseConfig.licenseType === 'يوم كامل' && stats.remainingFullDays <= 0) {
+        setMessage({
+          type: 'error',
+          text: 'لا يمكن المتابعة. تم استنفاد الحد الأقصى للاستئذانات الطويلة هذا الشهر.'
+        });
+        return;
+      }
+
+      if (licenseConfig.licenseType === 'نصف يوم' && licenseConfig.hours) {
+        if (stats.remainingShortLicenses <= 0) {
+          setMessage({
+            type: 'error',
+            text: 'لا يمكن المتابعة. تم استنفاد الحد الأقصى للاستئذانات القصيرة هذا الشهر.'
+          });
+          return;
+        }
+
+        const newTotalHours = stats.totalHours + licenseConfig.hours;
+        if (newTotalHours >= MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) {
+          setMessage({
+            type: 'error',
+            text: `لا يمكن المتابعة. سيتم الوصول أو تجاوز الحد الأقصى للساعات الشهرية (${MONTHLY_LIMITS.MAX_HOURS_PER_MONTH} ساعة).`
+          });
+          return;
+        }
+      }
     }
 
     if (currentStep < 2) {
@@ -155,6 +306,38 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
         text: 'لا يمكن إضافة رخصة للموظف المحدد. يوجد رخصة مسجلة مسبقاً في نفس التاريخ.'
       });
       return;
+    }
+
+    // فحص الحدود الشهرية قبل الحفظ
+    if (calculateEmployeeMonthlyStats) {
+      const stats = calculateEmployeeMonthlyStats;
+
+      if (licenseConfig.licenseType === 'يوم كامل' && stats.remainingFullDays <= 0) {
+        setMessage({
+          type: 'error',
+          text: 'لا يمكن حفظ الرخصة. تم استنفاد الحد الأقصى للاستئذانات الطويلة هذا الشهر.'
+        });
+        return;
+      }
+
+      if (licenseConfig.licenseType === 'نصف يوم' && licenseConfig.hours) {
+        if (stats.remainingShortLicenses <= 0) {
+          setMessage({
+            type: 'error',
+            text: 'لا يمكن حفظ الرخصة. تم استنفاد الحد الأقصى للاستئذانات القصيرة هذا الشهر.'
+          });
+          return;
+        }
+
+        const newTotalHours = stats.totalHours + licenseConfig.hours;
+        if (newTotalHours >= MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) {
+          setMessage({
+            type: 'error',
+            text: `لا يمكن حفظ الرخصة. سيتم الوصول أو تجاوز الحد الأقصى للساعات الشهرية (${MONTHLY_LIMITS.MAX_HOURS_PER_MONTH} ساعة).`
+          });
+          return;
+        }
+      }
     }
 
     setLoading(true);
@@ -208,7 +391,7 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-200 to-gray-100 rounded-2xl">
       <div className="max-w-4xl mx-auto px-6 py-8">
         <div className="text-center mb-12">
           <div className="flex justify-center items-center gap-4 mb-6">
@@ -484,6 +667,55 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                         </div>
                       </div>
                     )}
+
+                    {/* Monthly Limits Warning */}
+                    {monthlyLimitWarning && (
+                      <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-6 shadow-lg">
+                        <div className="flex items-center gap-3 text-yellow-800 mb-4">
+                          <div className="w-10 h-10 bg-yellow-600 rounded-full flex items-center justify-center">
+                            <AlertTriangle className="w-6 h-6 text-white" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-bold">تحذير الحدود الشهرية</h3>
+                            <p className="text-sm">يرجى مراجعة الحدود المسموحة للموظف</p>
+                          </div>
+                        </div>
+                        <div className="bg-white rounded-lg p-4 border border-yellow-200">
+                          <div className="space-y-2">
+                            {monthlyLimitWarning.split('\n').map((warning, index) => (
+                              <div key={index} className="flex items-center gap-2 text-yellow-800">
+                                <div className="w-2 h-2 bg-yellow-600 rounded-full"></div>
+                                <span className="text-sm font-medium">{warning}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Current month stats */}
+                        {calculateEmployeeMonthlyStats && (
+                          <div className="mt-4 bg-white rounded-lg p-4 border border-yellow-200">
+                            <h4 className="font-semibold text-yellow-800 mb-3">إحصائيات الشهر الحالي للموظف:</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                              <div className="text-center">
+                                <div className="font-bold text-lg text-gray-800">{calculateEmployeeMonthlyStats.fullDayLicenses}</div>
+                                <div className="text-gray-600">استئذانات طويلة</div>
+                                <div className="text-xs text-green-600">متبقي: {calculateEmployeeMonthlyStats.remainingFullDays}</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="font-bold text-lg text-gray-800">{calculateEmployeeMonthlyStats.shortLicenses}</div>
+                                <div className="text-gray-600">استئذانات قصيرة</div>
+                                <div className="text-xs text-green-600">متبقي: {calculateEmployeeMonthlyStats.remainingShortLicenses}</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="font-bold text-lg text-gray-800">{calculateEmployeeMonthlyStats.totalHours}</div>
+                                <div className="text-gray-600">إجمالي الساعات</div>
+                                <div className="text-xs text-green-600">متبقي: {calculateEmployeeMonthlyStats.remainingHours} ساعة</div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -586,15 +818,66 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                   </div>
                 )}
 
+                {/* Monthly Limits Warning in Step 2 */}
+                {monthlyLimitWarning && (
+                  <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-6 shadow-lg">
+                    <div className="flex items-center gap-3 text-yellow-800 mb-4">
+                      <div className="w-12 h-12 bg-yellow-600 rounded-full flex items-center justify-center">
+                        <AlertTriangle className="w-8 h-8 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-xl">تحذير: الحدود الشهرية</h4>
+                        <p className="text-sm">يرجى مراجعة الحدود المسموحة قبل الحفظ</p>
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-lg p-4 border border-yellow-200">
+                      <div className="space-y-3">
+                        {monthlyLimitWarning.split('\n').map((warning, index) => (
+                          <div key={index} className="flex items-center gap-3 text-yellow-800">
+                            <div className="w-3 h-3 bg-yellow-600 rounded-full"></div>
+                            <span className="font-medium">{warning}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Current month stats */}
+                    {calculateEmployeeMonthlyStats && (
+                      <div className="mt-4 bg-white rounded-lg p-4 border border-yellow-200">
+                        <h5 className="font-semibold text-yellow-800 mb-3">إحصائيات {licenseConfig.selectedEmployee?.full_name} للشهر الحالي:</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                          <div className="text-center p-3 bg-gray-50 rounded-lg">
+                            <div className="font-bold text-xl text-gray-800">{calculateEmployeeMonthlyStats.fullDayLicenses}</div>
+                            <div className="text-gray-600 font-medium">استئذانات طويلة</div>
+                            <div className="text-xs text-green-600 mt-1">متبقي: {calculateEmployeeMonthlyStats.remainingFullDays} من {MONTHLY_LIMITS.FULL_DAY_LICENSES}</div>
+                          </div>
+                          <div className="text-center p-3 bg-gray-50 rounded-lg">
+                            <div className="font-bold text-xl text-gray-800">{calculateEmployeeMonthlyStats.shortLicenses}</div>
+                            <div className="text-gray-600 font-medium">استئذانات قصيرة</div>
+                            <div className="text-xs text-green-600 mt-1">متبقي: {calculateEmployeeMonthlyStats.remainingShortLicenses} من {MONTHLY_LIMITS.SHORT_LICENSES}</div>
+                          </div>
+                          <div className="text-center p-3 bg-gray-50 rounded-lg">
+                            <div className="font-bold text-xl text-gray-800">{calculateEmployeeMonthlyStats.totalHours}</div>
+                            <div className="text-gray-600 font-medium">إجمالي الساعات</div>
+                            <div className="text-xs text-green-600 mt-1">متبقي: {calculateEmployeeMonthlyStats.remainingHours} من {MONTHLY_LIMITS.MAX_HOURS_PER_MONTH} ساعة</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
                   <button
                     onClick={handleSubmit}
-                    disabled={loading || !!(duplicateWarning && duplicateWarning.length > 0)}
+                    disabled={loading || !!(duplicateWarning && duplicateWarning.length > 0) || hasCriticalLimitViolation}
                     className={`flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-bold text-lg transition-all duration-200 shadow-lg ${
-                      loading || (duplicateWarning && duplicateWarning.length > 0)
+                      loading || (duplicateWarning && duplicateWarning.length > 0) || hasCriticalLimitViolation
                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 hover:shadow-xl'
+                        : monthlyLimitWarning
+                          ? 'bg-gradient-to-r from-yellow-600 to-yellow-700 text-white hover:from-yellow-700 hover:to-yellow-800 hover:shadow-xl'
+                          : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 hover:shadow-xl'
                     }`}
                   >
                     {loading ? (
@@ -644,10 +927,12 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleNext}
-                  disabled={!steps[0].completed || !!(duplicateWarning && duplicateWarning.length > 0)}
+                  disabled={!steps[0].completed || !!(duplicateWarning && duplicateWarning.length > 0) || hasCriticalLimitViolation}
                   className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
-                    steps[0].completed && !(duplicateWarning && duplicateWarning.length > 0)
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    steps[0].completed && !(duplicateWarning && duplicateWarning.length > 0) && !hasCriticalLimitViolation
+                      ? monthlyLimitWarning
+                        ? 'bg-yellow-600 text-white hover:bg-yellow-700'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
                 >

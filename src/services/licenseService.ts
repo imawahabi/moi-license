@@ -21,8 +21,276 @@ const mockEmployees = [
   { id: '80', full_name: 'عائشة صلاح محمد العميري', rank: 'سكرتيرة', file_number: '298050600105', category: 'مدني', created_at: '2025-07-24 07:19:40', updated_at: '2025-07-24 07:19:40' }
 ];
 
-let mockLicenses: any[] = [];
-let useMockData = false;
+// Mock licenses for current month testing
+const currentDate = new Date();
+const currentYear = currentDate.getFullYear();
+const currentMonth = currentDate.getMonth() + 1;
+
+let mockLicenses: any[] = [
+  // أحمد الكندري - تجاوز الحد (5 استئذانات قصيرة)
+  {
+    id: 'test-1',
+    employee_id: '12',
+    license_type: 'نصف يوم',
+    license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-05`,
+    hours: 4,
+    month: currentMonth,
+    year: currentYear,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    full_name: 'أحمد محمد ملا علي',
+    rank: 'ملازم أول',
+    file_number: '458325',
+    category: 'ضابط'
+  },
+  {
+    id: 'test-2',
+    employee_id: '12',
+    license_type: 'نصف يوم',
+    license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-08`,
+    hours: 4,
+    month: currentMonth,
+    year: currentYear,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    full_name: 'أحمد محمد ملا علي',
+    rank: 'ملازم أول',
+    file_number: '458325',
+    category: 'ضابط'
+  },
+  {
+    id: 'test-3',
+    employee_id: '12',
+    license_type: 'نصف يوم',
+    license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-12`,
+    hours: 4,
+    month: currentMonth,
+    year: currentYear,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    full_name: 'أحمد محمد ملا علي',
+    rank: 'ملازم أول',
+    file_number: '458325',
+    category: 'ضابط'
+  },
+  {
+    id: 'test-4',
+    employee_id: '12',
+    license_type: 'نصف يوم',
+    license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-15`,
+    hours: 4,
+    month: currentMonth,
+    year: currentYear,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    full_name: 'أحمد محمد ملا علي',
+    rank: 'ملازم أول',
+    file_number: '458325',
+    category: 'ضابط'
+  },
+  {
+    id: 'test-5',
+    employee_id: '12',
+    license_type: 'نصف يوم',
+    license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-18`,
+    hours: 4,
+    month: currentMonth,
+    year: currentYear,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    full_name: 'أحمد محمد ملا علي',
+    rank: 'ملازم أول',
+    file_number: '458325',
+    category: 'ضابط'
+  },
+  // خالد طارق - ضمن الحد (2 استئذانات قصيرة)
+  {
+    id: 'test-6',
+    employee_id: '10',
+    license_type: 'نصف يوم',
+    license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-10`,
+    hours: 4,
+    month: currentMonth,
+    year: currentYear,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    full_name: 'خالد طارق بن شعبان',
+    rank: 'ملازم أول',
+    file_number: '743542',
+    category: 'ضابط'
+  },
+  {
+    id: 'test-7',
+    employee_id: '10',
+    license_type: 'نصف يوم',
+    license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-20`,
+    hours: 4,
+    month: currentMonth,
+    year: currentYear,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    full_name: 'خالد طارق بن شعبان',
+    rank: 'ملازم أول',
+    file_number: '743542',
+    category: 'ضابط'
+  },
+  // محمد الحميدي - استئذان طويل واحد
+  {
+    id: 'test-8',
+    employee_id: '11',
+    license_type: 'يوم كامل',
+    license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-14`,
+    hours: 8,
+    month: currentMonth,
+    year: currentYear,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    full_name: 'محمد إبراهيم الحميدي',
+    rank: 'ملازم أول حقوقي',
+    file_number: '887981',
+    category: 'ضابط'
+  },
+  // بيانات إضافية للتقارير المخصصة
+  {
+    id: 'test-9',
+    employee_id: '34',
+    license_type: 'نصف يوم',
+    license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-07`,
+    hours: 4,
+    month: currentMonth,
+    year: currentYear,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    full_name: 'عبدالمطلب محمد فوزي حجاج',
+    rank: 'باحث قانوني',
+    file_number: '882885',
+    category: 'مهني'
+  },
+  {
+    id: 'test-10',
+    employee_id: '73',
+    license_type: 'يوم كامل',
+    license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-11`,
+    hours: 8,
+    month: currentMonth,
+    year: currentYear,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    full_name: 'محمد محمد قاسم أحمد',
+    rank: 'رئيس قسم',
+    file_number: '273112300976',
+    category: 'مدني'
+  },
+  {
+    id: 'test-11',
+    employee_id: '14',
+    license_type: 'نصف يوم',
+    license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-16`,
+    hours: 4,
+    month: currentMonth,
+    year: currentYear,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    full_name: 'عقاب ميسر العياف',
+    rank: 'و.أ.ضابط',
+    file_number: '744212',
+    category: 'ضابط صف'
+  },
+  // عمر الهندي - وصل لحد الساعات (12 ساعة = 3 استئذانات قصيرة)
+  {
+    id: 'test-12',
+    employee_id: '13',
+    license_type: 'نصف يوم',
+    license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-03`,
+    hours: 4,
+    month: currentMonth,
+    year: currentYear,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    full_name: 'عمر صبحي الهندي',
+    rank: 'و.أ.ضابط',
+    file_number: '457515',
+    category: 'ضابط'
+  },
+  {
+    id: 'test-13',
+    employee_id: '13',
+    license_type: 'نصف يوم',
+    license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-09`,
+    hours: 4,
+    month: currentMonth,
+    year: currentYear,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    full_name: 'عمر صبحي الهندي',
+    rank: 'و.أ.ضابط',
+    file_number: '457515',
+    category: 'ضابط'
+  },
+  {
+    id: 'test-14',
+    employee_id: '13',
+    license_type: 'نصف يوم',
+    license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-17`,
+    hours: 4,
+    month: currentMonth,
+    year: currentYear,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    full_name: 'عمر صبحي الهندي',
+    rank: 'و.أ.ضابط',
+    file_number: '457515',
+    category: 'ضابط'
+  },
+  // مشاري الوهيب - وصل لحد الاستئذانات الطويلة (3 أيام كاملة)
+  {
+    id: 'test-15',
+    employee_id: '9',
+    license_type: 'يوم كامل',
+    license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-06`,
+    hours: 8,
+    month: currentMonth,
+    year: currentYear,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    full_name: 'مشاري سامي الوهيب',
+    rank: 'رائد حقوقي',
+    file_number: '612154',
+    category: 'ضابط'
+  },
+  {
+    id: 'test-16',
+    employee_id: '9',
+    license_type: 'يوم كامل',
+    license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-13`,
+    hours: 8,
+    month: currentMonth,
+    year: currentYear,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    full_name: 'مشاري سامي الوهيب',
+    rank: 'رائد حقوقي',
+    file_number: '612154',
+    category: 'ضابط'
+  },
+  {
+    id: 'test-17',
+    employee_id: '9',
+    license_type: 'يوم كامل',
+    license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-19`,
+    hours: 8,
+    month: currentMonth,
+    year: currentYear,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    full_name: 'مشاري سامي الوهيب',
+    rank: 'رائد حقوقي',
+    file_number: '612154',
+    category: 'ضابط'
+  }
+];
+
+let useMockData = true; // تفعيل البيانات التجريبية لاختبار الحدود الشهرية
 
 export class LicenseService {
   private static async request(endpoint: string, options: RequestInit = {}): Promise<any> {

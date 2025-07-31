@@ -94,7 +94,7 @@ const DatePicker: React.FC<DatePickerProps> = ({
         }
 
         // حساب الموضع العمودي - أعلى الحقل بشكل افتراضي
-        let top = rect.top - calendarHeight - 8;
+        let top = rect.top - calendarHeight - -50;
 
         // إذا لم تكن هناك مساحة كافية أعلى، اعرضه أسفل
         if (top < 16) {
@@ -105,11 +105,12 @@ const DatePicker: React.FC<DatePickerProps> = ({
           }
         }
 
-        calendar.style.left = `${left}px`;
-        calendar.style.top = `${top}px`;
-        calendar.style.transform = 'none';
-        calendar.style.position = 'fixed';
-        calendar.style.zIndex = '99999';
+          calendar.style.position = 'fixed';
+          calendar.style.top = `${top}px`; // أو rect.top لو عايزه يطلع فوق
+          calendar.style.left = `${left}px`;
+          calendar.style.zIndex = '99999';
+          calendar.style.transform = 'none';
+          calendar.style.overflow = 'hidden';
       }
     }
   }, [isOpen]);
@@ -163,7 +164,11 @@ const DatePicker: React.FC<DatePickerProps> = ({
   };
 
   const handleDateSelect = (date: Date) => {
-    const dateString = date.toISOString().split('T')[0];
+    // Fix timezone issue by using local date formatting instead of toISOString
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateString = `${year}-${month}-${day}`;
     onChange(dateString);
     setIsOpen(false);
   };
@@ -181,7 +186,11 @@ const DatePicker: React.FC<DatePickerProps> = ({
   };
 
   const isDateDisabled = (date: Date) => {
-    const dateString = date.toISOString().split('T')[0];
+    // Fix timezone issue by using local date formatting instead of toISOString
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateString = `${year}-${month}-${day}`;
     if (minDate && dateString < minDate) return true;
     if (maxDate && dateString > maxDate) return true;
     return false;
@@ -189,7 +198,12 @@ const DatePicker: React.FC<DatePickerProps> = ({
 
   const isDateSelected = (date: Date) => {
     if (!value) return false;
-    return date.toISOString().split('T')[0] === value;
+    // Fix timezone issue by using local date formatting instead of toISOString
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateString = `${year}-${month}-${day}`;
+    return dateString === value;
   };
 
   const weeks = getDaysInMonth(currentMonth);
@@ -210,9 +224,9 @@ const DatePicker: React.FC<DatePickerProps> = ({
           ${isOpen ? 'open' : ''}
         `}
       >
-        <div className="flex items-center justify-between text-right">
+        <div className="flex items-center text-right">
           <Calendar className="w-5 h-5 text-gray-400" />
-          <span className={`text-right ${value ? 'text-gray-900' : 'text-gray-500'}`}>
+          <span className={`text-right pr-3 ${value ? 'text-gray-900' : 'text-gray-500'}`}>
             {value ? formatDate(value) : placeholder}
           </span>
         </div>

@@ -234,10 +234,7 @@ const Dashboard: React.FC = () => {
             {latestLicense ? (
               <>
                 <div className="text-base font-bold text-green-900 mb-2 leading-tight">
-                  {latestLicense.employee?.rank}
-                </div>
-                <div className="text-base font-semibold text-green-800 mb-3">
-                  {latestLicense.employee?.full_name}
+                   {latestLicense.employee?.rank} /{latestLicense.employee?.full_name}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`px-3 py-1 rounded-full text-xs font-bold ${

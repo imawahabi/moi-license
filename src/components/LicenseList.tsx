@@ -11,6 +11,26 @@ import { License, Employee, FilterOptions } from '../types';
 import DatePicker from './DatePicker';
 import { CATEGORY_ORDER, OFFICER_RANK_ORDER, NCO_RANK_ORDER } from '../utils/sorting';
 
+// Helper function to calculate time since registration
+const getTimeSince = (createdAt: string) => {
+  const now = new Date();
+  const created = new Date(createdAt);
+  const diffInMs = now.getTime() - created.getTime();
+
+  const hours = Math.floor(diffInMs / (1000 * 60 * 60));
+  const days = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+  const weeks = Math.floor(days / 7);
+  const months = Math.floor(days / 30);
+  const years = Math.floor(days / 365);
+
+  if (years > 0) return `${years} سنة`;
+  if (months > 0) return `${months} شهر`;
+  if (weeks > 0) return `${weeks} أسبوع`;
+  if (days > 0) return `${days} يوم`;
+  if (hours > 0) return `${hours} ساعة`;
+  return 'منذ قليل';
+};
+
 
 interface EditLicenseModalProps {
   license: License | null;
@@ -207,7 +227,7 @@ const LicenseList: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [showFilters, setShowFilters] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({});
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedLicense, setSelectedLicense] = useState<License | null>(null);
@@ -537,104 +557,148 @@ const LicenseList: React.FC = () => {
         </div>
       )}
 
-        <div className="search-container">
-          <div className="flex flex-wrap items-center justify-between gap-6">
-            <div className="search-input">
-              <input
-                type="text"
-                placeholder="ابحث بالاسم، الرتبة، أو رقم الملف..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 border border-secondary-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-white transition-all duration-200 shadow-sm hover:shadow-md"
-              />
-              <div className="search-icon">
-                <Search size={20} />
+        <div className="bg-white rounded-xl shadow-md border border-gray-200 mb-4">
+          <div className="px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 flex-1">
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Search className="w-5 h-5 text-blue-600" />
+                </div>
+                <div className="flex-1 max-w-md">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">البحث السريع</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="ابحث بالاسم أو الرتبة أو رقم الملف..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pr-12 pl-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white text-right"
+                    />
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                      <Search className="w-4 h-4" />
+                    </div>
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  {searchQuery && (
+                    <div className="mt-2 text-sm text-blue-600">
+                      البحث عن: "{searchQuery}"
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={`p-3 rounded-lg transition-all duration-200 flex items-center gap-2 font-medium ${
+                    showFilters
+                      ? 'bg-blue-100 text-blue-700 shadow-md'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <Filter className="w-4 h-4" />
+                  <span className="hidden md:block text-sm">الفلاتر</span>
+                </button>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+          </div>
+        </div>
+
+      {showFilters && (
+        <div className="mt-4 animate-slide-up">
+          <div className="bg-gray-50 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                <Filter className="w-4 h-4 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-800">خيارات الفلترة</h3>
+                <p className="text-xs text-gray-600">اختر الموظف ونوع الرخصة والتاريخ</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">الموظف</label>
+                <select
+                  value={filters.employee_id || ''}
+                  onChange={(e) => {
+                    const value = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                    setFilters(prev => ({ ...prev, employee_id: value }));
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white text-sm"
+                >
+                  <option value="">جميع الموظفين</option>
+                  {employeesWithLicenses.map(emp => (
+                    <option key={emp.id} value={emp.id}>{emp.full_name} - {emp.rank}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">نوع الرخصة</label>
+                <select
+                  value={filters.license_type || ''}
+                  onChange={(e) => setFilters(prev => ({ ...prev, license_type: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white text-sm"
+                >
+                  <option value="">جميع الأنواع</option>
+                  {[...new Set(licenses.map(l => l.license_type))].map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">الشهر</label>
+                <select
+                  value={filters.month || ''}
+                  onChange={(e) => setFilters(prev => ({ ...prev, month: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white text-sm"
+                >
+                  <option value="">جميع الشهور</option>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                    <option key={m} value={m}>{getMonthName(Number(m))}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">السنة</label>
+                <select
+                  value={filters.year || ''}
+                  onChange={(e) => setFilters(prev => ({ ...prev, year: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white text-sm"
+                >
+                  <option value="">جميع السنوات</option>
+                  {[...new Set(licenses.map(l => l.year))].sort((a,b) => b-a).map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-center">
               <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`p-3 rounded-xl transition-all duration-200 hover-lift ${
-                  showFilters
-                    ? 'bg-primary-100 text-primary-600 shadow-lg'
-                    : 'bg-secondary-100 text-secondary-600 hover:bg-secondary-200'
-                }`}
+                onClick={clearFilters}
+                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg text-sm"
               >
-                <Filter size={20} />
+                <X className="w-3.5 h-3.5" />
+                مسح جميع الفلاتر
               </button>
             </div>
           </div>
-
-          {showFilters && (
-            <div className="mt-6 p-6 bg-secondary-50 rounded-xl border border-secondary-200 animate-slide-up">
-              <h3 className="text-lg font-semibold text-secondary-800 mb-4 flex items-center gap-2">
-                <Filter className="w-5 h-5" />
-                خيارات الفلترة المتقدمة
-              </h3>
-              <div className="grid grid-cols-1 gap-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="w-full">
-                    <label className="block text-sm font-semibold text-secondary-700 mb-2">الموظف</label>
-                    <select
-                      value={filters.employee_id || ''}
-                      onChange={(e) => {
-                        const value = e.target.value ? parseInt(e.target.value, 10) : undefined;
-                        setFilters(prev => ({ ...prev, employee_id: value }));
-                      }}
-                      className="filter-select w-full"
-                    >
-                      <option value="">جميع الموظفين</option>
-                      {employeesWithLicenses.map(emp => <option key={emp.id} value={emp.id}>{emp.full_name}</option>)}
-                    </select>
-                  </div>
-                  <div className="w-full">
-                    <label className="block text-sm font-semibold text-secondary-700 mb-2">نوع الرخصة</label>
-                    <select
-                      value={filters.license_type || ''}
-                      onChange={(e) => setFilters(prev => ({ ...prev, license_type: e.target.value }))}
-                      className="filter-select w-full"
-                    >
-                      <option value="">جميع الأنواع</option>
-                      {[...new Set(licenses.map(l => l.license_type))].map(type => <option key={type} value={type}>{type}</option>)}
-                    </select>
-                  </div>
-                  <div className="w-full">
-                    <label className="block text-sm font-semibold text-secondary-700 mb-2">الشهر</label>
-                    <select
-                      value={filters.month || ''}
-                      onChange={(e) => setFilters(prev => ({ ...prev, month: e.target.value }))}
-                      className="filter-select w-full"
-                    >
-                      <option value="">جميع الشهور</option>
-                      {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{getMonthName(Number(m))}</option>)}
-                    </select>
-                  </div>
-                  <div className="w-full">
-                    <label className="block text-sm font-semibold text-secondary-700 mb-2">السنة</label>
-                    <select
-                      value={filters.year || ''}
-                      onChange={(e) => setFilters(prev => ({ ...prev, year: e.target.value }))}
-                      className="filter-select w-full"
-                    >
-                      <option value="">جميع السنوات</option>
-                      {[...new Set(licenses.map(l => l.year))].sort((a,b) => b-a).map(y => <option key={y} value={y}>{y}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="flex justify-center">
-                  <button
-                    onClick={clearFilters}
-                    className="btn-secondary hover-lift px-8"
-                  >
-                    مسح جميع الفلاتر
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
+      )}
 
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden hover:shadow-2xl transition-all duration-500">
+      {/* License List */}
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden hover:shadow-2xl transition-all duration-500">
           <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-8 py-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
@@ -698,8 +762,7 @@ const LicenseList: React.FC = () => {
                     <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">نوع الرخصة</th>
                     <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">تاريخ الرخصة</th>
                     <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">الساعات</th>
-                    <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">الشهر</th>
-                    <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">السنة</th>
+                    <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">سُجلت منذ</th>
                     <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 border-b-2 border-gray-200">الإجراءات</th>
                   </tr>
                 </thead>
@@ -740,11 +803,10 @@ const LicenseList: React.FC = () => {
                             <span className="text-gray-400 font-medium">يوم كامل</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-700">
-                          {filters.month && filters.year ? getMonthName(license.month + 1) : '-'}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-700">
-                          {filters.month && filters.year ? license.year : '-'}
+                        <td className="px-6 py-4 text-sm">
+                          <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-medium">
+                            {getTimeSince(license.license_date)}
+                          </span>
                         </td>
                         <td className="px-6 py-4 text-center">
                           <div className="flex items-center justify-center gap-2">
@@ -768,7 +830,29 @@ const LicenseList: React.FC = () => {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={10} className="text-center py-10">لا توجد بيانات لعرضها.</td>
+                      <td colSpan={9} className="text-center py-16">
+                        <div className="flex flex-col items-center justify-center">
+                          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                            <FileText className="w-8 h-8 text-gray-400" />
+                          </div>
+                          <h3 className="text-lg font-semibold text-gray-700 mb-2">لا توجد رخص</h3>
+                          <p className="text-gray-500 mb-4">لم يتم العثور على أي رخص تطابق معايير البحث</p>
+                          <div className="flex gap-3">
+                            <button
+                              onClick={clearFilters}
+                              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                            >
+                              مسح الفلاتر
+                            </button>
+                            <button
+                              onClick={() => setSearchQuery('')}
+                              className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                            >
+                              مسح البحث
+                            </button>
+                          </div>
+                        </div>
+                      </td>
                     </tr>
                   )}
                 </tbody>

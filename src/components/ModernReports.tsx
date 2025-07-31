@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { FileText, Calendar, Users, Filter, Download, Printer, Eye, ChevronLeft, CheckCircle } from 'lucide-react';
+import { FileText, Calendar, Users, Printer, Eye, ChevronLeft, CheckCircle } from 'lucide-react';
 import Select from 'react-select';
 import DatePicker from './DatePicker';
-import { EmployeeService } from '../services/employeeService';
+
 import { LicenseService } from '../services/licenseService';
-import { Employee, License } from '../types';
+import { License } from '../types';
 import { CATEGORY_ORDER, OFFICER_RANK_ORDER, NCO_RANK_ORDER } from '../utils/sorting';
 
 interface ReportConfig {
@@ -25,12 +25,9 @@ interface ReportStep {
   completed: boolean;
 }
 
-interface ModernReportsProps {
-  onNavigate?: (tab: string) => void;
-}
+interface ModernReportsProps {}
 
-const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
-  const [employees, setEmployees] = useState<Employee[]>([]);
+const ModernReports: React.FC<ModernReportsProps> = () => {
   const [licenses, setLicenses] = useState<License[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -57,11 +54,7 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
     const loadData = async () => {
       try {
         setLoading(true);
-        const [employeesData, licensesData] = await Promise.all([
-          EmployeeService.getAll(),
-          LicenseService.getAll()
-        ]);
-        setEmployees(employeesData);
+        const licensesData = await LicenseService.getAll();
         setLicenses(licensesData);
       } catch (error) {
         console.error('Error loading data:', error);
@@ -76,24 +69,17 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
   const steps: ReportStep[] = [
     {
       id: 1,
-      title: 'تفاصيل التقرير',
-      description: 'أدخل عنوان التقرير والفترة الزمنية',
+      title: 'إعدادات التقرير',
+      description: 'تحديد العنوان والفترة الزمنية والفئات',
       icon: <FileText className="w-5 h-5" />,
-      completed: reportConfig.dateRange.startDate && reportConfig.dateRange.endDate
+      completed: currentStep > 1
     },
     {
       id: 2,
-      title: 'اختيار الفئات',
-      description: 'حدد الفئات المراد تضمينها في التقرير',
-      icon: <Users className="w-5 h-5" />,
-      completed: reportConfig.categories.length > 0
-    },
-    {
-      id: 3,
-      title: 'معاينة وطباعة',
-      description: 'راجع التقرير واطبعه',
+      title: 'معاينة التقرير',
+      description: 'مراجعة البيانات والطباعة',
       icon: <Eye className="w-5 h-5" />,
-      completed: showReport
+      completed: currentStep > 2
     }
   ];
 
@@ -148,26 +134,42 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
     });
     
     return Array.from(employeeMap.values()).sort((a, b) => {
-      const categoryOrder = { 'ضابط': 1, 'ضابط صف': 2, 'عريف': 3 };
-      const aCategoryOrder = categoryOrder[a.employee.category as keyof typeof categoryOrder] || 4;
-      const bCategoryOrder = categoryOrder[b.employee.category as keyof typeof categoryOrder] || 4;
-      
+      // استخدام نفس منطق الترتيب الموجود في utils/sorting.ts
+      const aCategoryOrder = CATEGORY_ORDER[a.employee.category] || 99;
+      const bCategoryOrder = CATEGORY_ORDER[b.employee.category] || 99;
+
       if (aCategoryOrder !== bCategoryOrder) {
         return aCategoryOrder - bCategoryOrder;
       }
-      
+
+      // ترتيب الضباط حسب الرتبة (الأعلى أولاً)
       if (a.employee.category === 'ضابط') {
-        return (OFFICER_RANK_ORDER[a.employee.rank] || 999) - (OFFICER_RANK_ORDER[b.employee.rank] || 999);
-      } else if (a.employee.category === 'ضابط صف') {
-        return (NCO_RANK_ORDER[a.employee.rank] || 999) - (NCO_RANK_ORDER[b.employee.rank] || 999);
+        const rankA = OFFICER_RANK_ORDER[a.employee.rank.replace(' حقوقي', '').trim()] || 999;
+        const rankB = OFFICER_RANK_ORDER[b.employee.rank.replace(' حقوقي', '').trim()] || 999;
+        if (rankA !== rankB) return rankA - rankB;
       }
-      
+
+      // ترتيب ضباط الصف حسب الرتبة (الأعلى أولاً)
+      if (a.employee.category === 'ضابط صف') {
+        const rankA = NCO_RANK_ORDER[a.employee.rank] || 999;
+        const rankB = NCO_RANK_ORDER[b.employee.rank] || 999;
+        if (rankA !== rankB) return rankA - rankB;
+      }
+
+      // ترتيب أبجدي للأسماء في حالة تساوي الرتب
       return a.employee.full_name.localeCompare(b.employee.full_name, 'ar');
     });
   }, [filteredLicenses]);
 
+  const canProceedToNextStep = () => {
+    if (currentStep === 1) {
+      return !!(reportConfig.dateRange.startDate && reportConfig.dateRange.endDate);
+    }
+    return false;
+  };
+
   const handleNext = () => {
-    if (currentStep < 3) {
+    if (currentStep < 2 && canProceedToNextStep()) {
       setCurrentStep(currentStep + 1);
     }
   };
@@ -178,12 +180,184 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
     }
   };
 
-  const generateReport = () => {
-    setShowReport(true);
-  };
+
 
   const handlePrint = () => {
-    window.print();
+    // Create custom print window with only the report content
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    if (!printWindow) return;
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>تقرير الطباعة</title>
+        <style>
+          @page {
+            size: A4;
+            margin: 4.5cm 1.75cm 0.5cm 1.75cm;
+            orientation: portrait;
+          }
+
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+
+          body {
+            font-family: 'Sultan Normal', 'Times New Roman', serif;
+            font-size: 12pt;
+            line-height: 1.4;
+            color: #000;
+            background: white;
+            padding: 20px;
+            direction: rtl;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+          }
+
+          .report-header {
+            text-align: center;
+            margin-bottom: 40px;
+            flex: 0 0 auto;
+            padding: 80px 0 40px 0;
+          }
+
+          .content-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+          }
+
+          .report-title {
+            font-family: 'Sultan Bold', 'Times New Roman', serif;
+            font-size: 22pt;
+            font-weight: normal;
+            text-decoration: none;
+            text-align: center;
+            margin-bottom: 10px;
+            color: #000;
+          }
+
+          .report-date {
+            font-family: 'Sultan Normal', 'Times New Roman', serif;
+            font-size: 18pt;
+            color: #000;
+            text-align: center;
+            margin-bottom: 5px;
+            font-weight:bold;
+          }
+
+          .report-categories {
+            font-family: 'Sultan Bold', 'Times New Roman', serif;
+            font-size: 18pt;
+            color: #ff0000;
+            margin-bottom: 5px;
+          }
+
+          table {
+            width: 100%;
+            margin: 0px auto;
+            direction: rtl;
+          }
+
+          th, td {
+            border: 1px solid #000; /* حدود سميكة */
+            padding: 8px;
+            text-align: center;
+            vertical-align: top;
+            font-family: 'Sultan Normal', 'Times New Roman', serif;
+            font-size: 17pt;
+          }
+
+          th {
+            background: #e8e8e8;
+            font-family: 'Sultan Bold', 'Times New Roman', serif;
+            font-size: 17pt;
+          }
+
+          /* لجعل حدود الخلايا الداخلية واضحة جداً */
+          table, th, td {
+            border-width: 2px;
+            border-style: solid;
+            border-collapse: collapse
+            border-color: #000;
+          }
+
+          .number-cell {
+            font-weight: bold;
+          }
+
+          .employee-name {
+            text-align: center;
+            font-weight: normal;
+          }
+
+          @media print {
+            body {
+              padding: 0;
+              margin: 0;
+            }
+
+            .report-header {
+              padding-top: 0;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="content-wrapper">
+          <div class="report-header">
+            <h1 class="report-title">${reportConfig.title || `تقرير متابعة موظفي إدارة السجل العام لسنة ${new Date(reportConfig.dateRange.startDate).getFullYear()}`}</h1>
+            <p class="report-date">من ${reportConfig.dateRange.startDate.replace(/-/g, '/')} إلى ${reportConfig.dateRange.endDate.replace(/-/g, '/')}</p>
+            ${reportConfig.categories.length > 0 ? `<p class="report-categories">( ${reportConfig.categories.map(cat => {
+              if (cat === 'ضابط') return 'ضباط';
+              if (cat === 'ضابط صف') return 'ضباط صف';
+              if (cat === 'مهني') return 'مهنيين';
+              if (cat === 'مدني') return 'مدنيين';
+              return cat;
+            }).join(' / ')} )</p>` : ''}
+          </div>
+
+          <table>
+          <thead class="background-color:#e8e8e8">
+            <tr>
+              <th>م</th>
+              <th>الرتبة</th>
+              <th>الاسم</th>
+              <th>استئذان طويل</th>
+              <th>استئذان قصير</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${reportData.map((item, index) => `
+              <tr>
+                <td>${index + 1}</td>
+                <td>${(item.employee.category === 'ضابط' || item.employee.category === 'ضابط صف') ? item.employee.rank : item.employee.category}</td>
+                <td class="employee-name">${item.employee.full_name}</td>
+                <td class="number-cell">${item.fullDays}</td>
+                <td class="number-cell">${item.halfDays}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.documentElement.innerHTML = printContent;
+
+    // Wait for content to load then print
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 1000);
   };
 
   const customSelectStyles = {
@@ -240,15 +414,20 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
         {/* Print Header - Only visible when printing */}
         <div className="print-only text-center mb-8">
           <h1 className="text-2xl font-bold text-gray-800 mb-2">
-            {reportConfig.title || 'تقرير متابعة موظفي إدارة السجل العام'}
+            {reportConfig.title || `تقرير متابعة موظفي إدارة السجل العام لسنة ${new Date(reportConfig.dateRange.startDate).getFullYear()}`}
           </h1>
-          <p className="text-gray-600">
-            من تاريخ {new Date(reportConfig.dateRange.startDate).toLocaleDateString('en-US')} 
-            إلى تاريخ {new Date(reportConfig.dateRange.endDate).toLocaleDateString('en-US')}
+          <p className="text-gray-600 text-lg mb-2">
+            من {reportConfig.dateRange.startDate.replace(/-/g, '/')} إلى {reportConfig.dateRange.endDate.replace(/-/g, '/')}
           </p>
           {reportConfig.categories.length > 0 && (
             <p className="text-blue-600 font-semibold mt-2">
-              ( {reportConfig.categories.join(' / ')} )
+              ( {reportConfig.categories.map(cat => {
+                if (cat === 'ضابط') return 'ضباط';
+                if (cat === 'ضابط صف') return 'ضباط صف';
+                if (cat === 'مهني') return 'مهنيين';
+                if (cat === 'مدني') return 'مدنيين';
+                return cat;
+              }).join(' / ')} )
             </p>
           )}
         </div>
@@ -270,15 +449,6 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
               </h1>
             </div>
             <div className="flex items-center gap-3">
-              {onNavigate && (
-                <button
-                  onClick={() => onNavigate('old-reports')}
-                  className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <FileText className="w-4 h-4" />
-                  التقارير التقليدية
-                </button>
-              )}
               <button
                 onClick={handlePrint}
                 className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md"
@@ -373,23 +543,14 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
-      <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-200 to-gray-100 rounded-2xl">
+      <div className="max-w-6xl mx-auto px-6 py-8">
         {/* Header */}
         <div className="text-center mb-12">
           <div className="flex justify-center items-center gap-4 mb-6">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl">
               <FileText className="w-8 h-8 text-white" />
             </div>
-            {onNavigate && (
-              <button
-                onClick={() => onNavigate('old-reports')}
-                className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-gray-200"
-              >
-                <FileText className="w-4 h-4" />
-                التقارير التقليدية
-              </button>
-            )}
           </div>
           <h1 className="text-3xl font-bold text-gray-800 mb-2">إنشاء تقرير جديد</h1>
           <p className="text-gray-600">اتبع الخطوات لإنشاء تقرير مخصص لمتابعة الموظفين</p>
@@ -465,19 +626,15 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
                     required
                   />
                 </div>
-              </div>
-            )}
 
-            {currentStep === 2 && (
-              <div className="space-y-6">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-3">اختيار الفئات</label>
                   <Select
                     isMulti
                     options={Object.keys(CATEGORY_ORDER).map(cat => ({ value: cat, label: cat }))}
                     value={reportConfig.categories.map(cat => ({ value: cat, label: cat }))}
-                    onChange={(newValue) => setReportConfig(prev => ({ 
-                      ...prev, 
+                    onChange={(newValue) => setReportConfig(prev => ({
+                      ...prev,
                       categories: newValue ? newValue.map(v => v.value) : []
                     }))}
                     placeholder="اختر الفئات المراد تضمينها..."
@@ -489,9 +646,12 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
                   />
                   <p className="text-sm text-gray-500 mt-2">اتركها فارغة لتشمل جميع الفئات</p>
                 </div>
+              </div>
+            )}
 
-
-
+            {currentStep === 2 && (
+              <div className="space-y-6">
+                {/* Report Preview Header */}
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-6 shadow-sm">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
@@ -508,7 +668,7 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
                         <FileText className="w-4 h-4 text-blue-500" />
                       </div>
                       <p className="text-blue-900 font-semibold mt-1 text-right">
-                        {reportConfig.title || 'تقرير متابعة موظفي إدارة السجل العام'}
+                        {reportConfig.title || 'تقرير متابعة موظفي إدارة السجل العام'} لسنة {new Date(reportConfig.dateRange.startDate).getFullYear()}
                       </p>
                     </div>
 
@@ -532,33 +692,56 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
                         <Users className="w-4 h-4 text-blue-500" />
                       </div>
                       <p className="text-blue-900 font-semibold mt-1 text-right">
-                        {reportConfig.categories.length > 0 ? reportConfig.categories.join(' • ') : 'جميع الفئات'}
+                        {reportConfig.categories.length > 0 ? reportConfig.categories.map(cat => {
+                          if (cat === 'ضابط') return 'ضباط';
+                          if (cat === 'ضابط صف') return 'ضباط صف';
+                          if (cat === 'مهني') return 'مهنيين';
+                          if (cat === 'مدني') return 'مدنيين';
+                          return cat;
+                        }).join(' • ') : 'جميع الفئات'}
                       </p>
                     </div>
 
-                    {/* Additional Statistics */}
+                    {/* Statistics */}
                     {reportData.length > 0 && (
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-4 gap-3">
+                        <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-4 border border-purple-200">
+                          <div className="text-center">
+                            <div className="text-xl font-bold text-purple-700">
+                              {reportData.reduce((sum, emp) => sum + emp.fullDays, 0)}
+                            </div>
+                            <div className="text-xs text-purple-600 font-medium">إستئذانات طويلة</div>
+                          </div>
+                        </div>
                         <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-4 border border-orange-200">
                           <div className="text-center">
                             <div className="text-xl font-bold text-orange-700">
-                              {reportData.reduce((sum, emp) => sum + emp.fullDays, 0)}
-                            </div>
-                            <div className="text-xs text-orange-600 font-medium">رخص يوم كامل</div>
-                          </div>
-                        </div>
-                        <div className="bg-gradient-to-br from-cyan-50 to-blue-50 rounded-xl p-4 border border-cyan-200">
-                          <div className="text-center">
-                            <div className="text-xl font-bold text-cyan-700">
                               {reportData.reduce((sum, emp) => sum + emp.halfDays, 0)}
                             </div>
-                            <div className="text-xs text-cyan-600 font-medium">رخص نصف يوم</div>
+                            <div className="text-xs text-orange-600 font-medium">إستئذانات قصيرة</div>
+                          </div>
+                        </div>
+                        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
+                          <div className="text-center">
+                            <div className="text-xl font-bold text-green-700">
+                              {reportData.reduce((sum, emp) => sum + emp.fullDays + emp.halfDays, 0)}
+                            </div>
+                            <div className="text-xs text-green-600 font-medium">إجمالي الإستئذانات</div>
+                          </div>
+                        </div>
+                        <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 border border-blue-200">
+                          <div className="text-center">
+                            <div className="text-xl font-bold text-blue-700">
+                              {reportData.length}
+                            </div>
+                            <div className="text-xs text-blue-600 font-medium">إجمالي الموظفين</div>
                           </div>
                         </div>
                       </div>
                     )}
                   </div>
                 </div>
+
 
                 {reportData.length === 0 && reportConfig.dateRange.startDate && reportConfig.dateRange.endDate && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
@@ -571,81 +754,19 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
                     <p className="text-sm text-yellow-700 mt-1">جرب تغيير نطاق التاريخ أو الفئات للحصول على نتائج</p>
                   </div>
                 )}
-              </div>
-            )}
-
-            {currentStep === 3 && (
-              <div className="space-y-8">
-                {/* Header */}
-                <div className="text-center">
-                  <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl mb-4 shadow-lg">
-                    <CheckCircle className="w-10 h-10 text-white" />
-                  </div>
-                  <h3 className="text-3xl font-bold text-gray-800 mb-2">مراجعة التقرير النهائية</h3>
-                  <p className="text-gray-600 max-w-lg mx-auto">
-                    راجع إحصائيات التقرير أدناه، ثم اختر معاينة التقرير أو طباعته مباشرة
-                  </p>
-                </div>
-
-                {/* Simplified Report Summary */}
-                <div className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm">
-                  <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl mb-4">
-                      <FileText className="w-8 h-8 text-white" />
-                    </div>
-                    <h4 className="text-2xl font-bold text-gray-800 mb-2">التقرير جاهز للمراجعة</h4>
-                    <p className="text-gray-600">
-                      تم إعداد التقرير بنجاح ويحتوي على {reportData.length} موظف و {reportData.reduce((sum, emp) => sum + emp.fullDays + emp.halfDays, 0)} رخصة
-                    </p>
-                  </div>
-
-                  {/* Report Details */}
-                  <div className="bg-gray-50 rounded-xl p-6 mb-8">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-gray-600">العنوان:</span>
-                          <span className="text-gray-800 text-right font-semibold">
-                            {reportConfig.title || 'تقرير متابعة موظفي إدارة السجل العام'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-gray-600">الفترة:</span>
-                          <span className="text-gray-800 text-right">
-                            {new Date(reportConfig.dateRange.startDate).toLocaleDateString('ar-US')} - {new Date(reportConfig.dateRange.endDate).toLocaleDateString('ar-US')}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-gray-600">الفئات:</span>
-                          <span className="text-gray-800 text-right">
-                            {reportConfig.categories.length > 0 ? reportConfig.categories.join(' • ') : 'جميع الفئات'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-gray-600">إجمالي الساعات:</span>
-                          <span className="text-gray-800 text-right font-semibold">
-                            {reportData.reduce((sum, emp) => sum + emp.totalHours, 0)} ساعة
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
 
                 {/* Action Buttons */}
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <div className="flex gap-4 justify-center">
                   <button
                     onClick={() => setShowPreviewModal(true)}
-                    className="flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:from-blue-700 hover:to-indigo-700"
+                    className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium shadow-lg"
                   >
                     <Eye className="w-5 h-5" />
                     معاينة التقرير
                   </button>
                   <button
                     onClick={handlePrint}
-                    className="flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-2xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:from-green-700 hover:to-emerald-700"
+                    className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors font-medium shadow-lg"
                   >
                     <Printer className="w-5 h-5" />
                     طباعة التقرير
@@ -664,10 +785,13 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
                 </div>
               </div>
             )}
+
+
+
           </div>
 
-          {/* Navigation - Hidden in step 3 */}
-          {currentStep < 3 && (
+          {/* Navigation */}
+          {currentStep < 2 && (
             <div className="px-8 py-6 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
               <button
                 onClick={handleBack}
@@ -685,9 +809,9 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleNext}
-                  disabled={!steps[currentStep - 1].completed}
+                  disabled={!canProceedToNextStep()}
                   className={`flex items-center gap-2 px-8 py-3 rounded-xl font-medium transition-all duration-200 ${
-                    steps[currentStep - 1].completed
+                    canProceedToNextStep()
                       ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
@@ -704,9 +828,9 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
       {/* Preview Modal */}
       {showPreviewModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
+          <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex items-center justify-between">
+            <div className="no-print bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-4 flex items-center justify-between">
               <h3 className="text-xl font-bold text-white">معاينة التقرير</h3>
               <button
                 onClick={() => setShowPreviewModal(false)}
@@ -723,7 +847,7 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
               {/* Report Header */}
               <div className="text-center mb-8 pb-6 border-b border-gray-200">
                 <h1 className="text-2xl font-bold text-gray-800 mb-2">
-                  {reportConfig.title || 'تقرير متابعة موظفي إدارة السجل العام'}
+                  {reportConfig.title || 'تقرير متابعة موظفي إدارة السجل العام'} لسنة {new Date(reportConfig.dateRange.startDate).getFullYear()}
                 </h1>
                 <p className="text-gray-600">
                   من تاريخ {new Date(reportConfig.dateRange.startDate).toLocaleDateString('ar-US')}
@@ -741,25 +865,25 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
                 <table className="w-full border-collapse border border-gray-300 text-sm">
                   <thead>
                     <tr className="bg-blue-600 text-white">
-                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">#</th>
-                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">الاسم الكامل</th>
+                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">م</th>
                       <th className="border border-gray-300 px-4 py-3 text-center font-bold">الرتبة</th>
-                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">الفئة</th>
-                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">أيام كاملة</th>
-                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">أنصاف أيام</th>
-                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">إجمالي الساعات</th>
+                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">الاسم</th>
+                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">استئذان طويل</th>
+                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">استئذان قصير</th>
                     </tr>
                   </thead>
                   <tbody>
                     {reportData.map((item, index) => (
                       <tr key={item.employee.id} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                         <td className="border border-gray-300 px-4 py-3 text-center font-medium">{index + 1}</td>
-                        <td className="border border-gray-300 px-4 py-3 text-right font-semibold">{item.employee.full_name}</td>
-                        <td className="border border-gray-300 px-4 py-3 text-center">{item.employee.rank}</td>
-                        <td className="border border-gray-300 px-4 py-3 text-center">{item.employee.category}</td>
+                        <td className="border border-gray-300 px-4 py-3 text-center">
+                          {item.employee.category === 'ضابط' || item.employee.category === 'ضابط صف'
+                            ? item.employee.rank
+                            : item.employee.category}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-3 text-center font-semibold">{item.employee.full_name}</td>
                         <td className="border border-gray-300 px-4 py-3 text-center font-bold text-blue-600">{item.fullDays}</td>
                         <td className="border border-gray-300 px-4 py-3 text-center font-bold text-green-600">{item.halfDays}</td>
-                        <td className="border border-gray-300 px-4 py-3 text-center font-bold text-purple-600">{item.totalHours}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -767,7 +891,7 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
               </div>
 
               {/* Summary Footer */}
-              <div className="mt-6 bg-gray-50 rounded-xl p-4">
+              <div className="no-print mt-6 bg-gray-50 rounded-xl p-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                   <div>
                     <div className="text-2xl font-bold text-blue-600">{reportData.length}</div>
@@ -775,22 +899,22 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
                   </div>
                   <div>
                     <div className="text-2xl font-bold text-green-600">{reportData.reduce((sum, emp) => sum + emp.fullDays + emp.halfDays, 0)}</div>
-                    <div className="text-sm text-gray-600">إجمالي الرخص</div>
+                    <div className="text-sm text-gray-600">إجمالي الإستئذانات</div>
                   </div>
                   <div>
                     <div className="text-2xl font-bold text-orange-600">{reportData.reduce((sum, emp) => sum + emp.fullDays, 0)}</div>
-                    <div className="text-sm text-gray-600">أيام كاملة</div>
+                    <div className="text-sm text-gray-600">إستئذانات طويلة</div>
                   </div>
                   <div>
                     <div className="text-2xl font-bold text-purple-600">{reportData.reduce((sum, emp) => sum + emp.halfDays, 0)}</div>
-                    <div className="text-sm text-gray-600">أنصاف أيام</div>
+                    <div className="text-sm text-gray-600">إستئذانات قصيرة</div>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Modal Footer */}
-            <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-t border-gray-200">
+            <div className="no-print bg-gray-50 px-6 py-4 flex items-center justify-between border-t border-gray-200">
               <button
                 onClick={() => setShowPreviewModal(false)}
                 className="px-6 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-lg transition-colors"

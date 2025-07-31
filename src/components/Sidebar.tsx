@@ -2,15 +2,16 @@ import React from 'react';
 import {
   BarChart3,
   Users,
-  FileText,
-  Shield,
+  FolderOpen,
+  BarChart4,
   PlusCircle,
   ChevronLeft,
   ChevronRight,
   Home,
   Settings,
   Bell,
-  Zap
+  Zap,
+  FileBarChart
 } from 'lucide-react';
 
 interface NavigationItem {
@@ -23,14 +24,15 @@ interface NavigationItem {
 const navigation: NavigationItem[] = [
   { id: 'dashboard', name: 'لوحة التحكم', icon: BarChart3, category: 'main' },
   { id: 'add-license', name: 'إضافة رخصة جديدة', icon: PlusCircle, category: 'main' },
-  { id: 'licenses', name: 'قائمة الرخص', icon: FileText, category: 'main' },
+  { id: 'licenses', name: 'سجلات الرخص', icon: FolderOpen, category: 'main' },
   { id: 'employees', name: 'إدارة الموظفين', icon: Users, category: 'main' },
-  { id: 'reports', name: 'التقارير والإحصائيات', icon: Shield, category: 'management' },
+  { id: 'reports', name: 'إنشاء تقرير جديد', icon: FileBarChart, category: 'management' },
+  { id: 'old-reports', name: 'التقارير الشاملة', icon: BarChart4, category: 'management' },
 ];
 
 const categoryLabels = {
   main: 'العمليات الأساسية',
-  management: 'الإدارة والمتابعة',
+  management: 'التقارير والإحصائيات ',
   system: 'إعدادات النظام'
 };
 

@@ -23,7 +23,7 @@ function App() {
       case 'employees':
         return <EmployeeList />;
       case 'reports':
-        return <ModernReports onNavigate={setActiveTab} />;
+        return <ModernReports />;
       case 'old-reports':
         return <Reports />;
       case 'alerts':
