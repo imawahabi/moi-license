@@ -3,118 +3,9 @@ import { Plus, Users, Calendar, CheckCircle, ChevronLeft, Eye, FileText, AlertTr
 import { LicenseService } from '../services/licenseService';
 import { EmployeeService } from '../services/employeeService';
 import { Employee, License } from '../types';
-import DatePicker, { registerLocale } from 'react-datepicker';
-import ar from 'date-fns/locale/ar-SA';
-import 'react-datepicker/dist/react-datepicker.css';
+import DatePicker from './DatePicker';
 
-// Register Arabic locale for DatePicker
-registerLocale('ar', ar);
 
-// CSS for Arabic DatePicker
-const arabicCalendarStyles = `
-  /* React DatePicker Arabic Styles */
-  .react-datepicker-wrapper {
-    width: 100%;
-  }
-
-  .react-datepicker__input-container input {
-    direction: rtl !important;
-    text-align: right !important;
-  }
-
-  .react-datepicker {
-    direction: rtl !important;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
-    border: 2px solid #e5e7eb !important;
-    border-radius: 12px !important;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
-  }
-
-  .react-datepicker__header {
-    background-color: #3b82f6 !important;
-    border-bottom: none !important;
-    border-radius: 10px 10px 0 0 !important;
-    padding: 16px !important;
-  }
-
-  .react-datepicker__current-month {
-    color: white !important;
-    font-weight: bold !important;
-    font-size: 16px !important;
-    margin-bottom: 8px !important;
-  }
-
-  .react-datepicker__day-names {
-    display: flex !important;
-    flex-direction: row-reverse !important;
-  }
-
-  .react-datepicker__day-name {
-    color: white !important;
-    font-weight: 600 !important;
-    width: 32px !important;
-    height: 32px !important;
-    line-height: 32px !important;
-    margin: 2px !important;
-  }
-
-  .react-datepicker__month {
-    margin: 8px !important;
-  }
-
-  .react-datepicker__week {
-    display: flex !important;
-    flex-direction: row-reverse !important;
-  }
-
-  .react-datepicker__day {
-    width: 32px !important;
-    height: 32px !important;
-    line-height: 32px !important;
-    margin: 2px !important;
-    border-radius: 8px !important;
-    transition: all 0.2s ease !important;
-  }
-
-  .react-datepicker__day:hover {
-    background-color: #dbeafe !important;
-    color: #1d4ed8 !important;
-  }
-
-  .react-datepicker__day--selected {
-    background-color: #3b82f6 !important;
-    color: white !important;
-    font-weight: bold !important;
-  }
-
-  .react-datepicker__day--today {
-    background-color: #fef3c7 !important;
-    color: #92400e !important;
-    font-weight: bold !important;
-  }
-
-  .react-datepicker__navigation {
-    top: 20px !important;
-  }
-
-  .react-datepicker__navigation--previous {
-    right: 20px !important;
-    left: auto !important;
-  }
-
-  .react-datepicker__navigation--next {
-    left: 20px !important;
-    right: auto !important;
-  }
-
-  .react-datepicker__navigation-icon::before {
-    border-color: white !important;
-  }
-
-  .react-datepicker__triangle {
-    display: none !important;
-  }
-`;
 
 interface LicenseConfig {
   selectedEmployee: Employee | null;
@@ -150,18 +41,7 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
     hours: undefined
   });
 
-  // Add CSS for Arabic DatePicker
-  useEffect(() => {
-    const styleElement = document.createElement('style');
-    styleElement.textContent = arabicCalendarStyles;
-    document.head.appendChild(styleElement);
 
-    return () => {
-      if (document.head.contains(styleElement)) {
-        document.head.removeChild(styleElement);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     const loadEmployees = async () => {
@@ -502,22 +382,14 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                     <h3 className="text-lg font-bold text-gray-800">تفاصيل الرخصة</h3>
 
                     {/* License Date */}
-                    <div className="space-y-3">
-                      <label className="block text-sm font-semibold text-gray-700">تاريخ الرخصة *</label>
-                      <div className="relative">
-                        <DatePicker
-                          selected={licenseConfig.licenseDate}
-                          onChange={(date: Date | null) => setLicenseConfig(prev => ({ ...prev, licenseDate: date }))}
-                          locale="ar"
-                          dateFormat="dd/MM/yyyy"
-                          placeholderText="اختر التاريخ"
-                          className="w-full px-4 py-3 border-2 border-gray-200 text-right rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                          calendarClassName="arabic-calendar"
-                          showPopperArrow={false}
-                          popperPlacement="bottom-start"
-                        />
-                      </div>
-                    </div>
+                    <DatePicker
+                      label="تاريخ الرخصة"
+                      value={licenseConfig.licenseDate ? licenseConfig.licenseDate.toISOString().split('T')[0] : ''}
+                      onChange={(date: string) => setLicenseConfig(prev => ({ ...prev, licenseDate: new Date(date) }))}
+                      placeholder="اختر التاريخ"
+                      className="date-picker-rtl"
+                      required
+                    />
 
                     {/* License Type Selection */}
                     <div className="space-y-4">

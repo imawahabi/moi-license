@@ -5,6 +5,7 @@ import 'jspdf-autotable';
 import { Packer, Document, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, WidthType, BorderStyle, VerticalAlign, UnderlineType, ShadingType, HeightRule } from 'docx';
 import { saveAs } from 'file-saver';
 import { Search, Filter, FileText, Printer, Calendar } from 'lucide-react';
+import DatePicker from './DatePicker';
 
 import SultanBold from '../assets/fonts/Sultan-bold-normal.js';
 import TimesBold from '../assets/fonts/Times-New-Roman-bold.js';
@@ -760,24 +761,21 @@ const Reports: React.FC = () => {
                   فلترة بالتاريخ
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">من تاريخ</label>
-                    <input
-                      type="date"
-                      value={dateRange.startDate}
-                      onChange={(e) => handleDateRangeChange('startDate', e.target.value)}
-                      className="w-full px-4 py-3 bg-white border-2 border-green-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">إلى تاريخ</label>
-                    <input
-                      type="date"
-                      value={dateRange.endDate}
-                      onChange={(e) => handleDateRangeChange('endDate', e.target.value)}
-                      className="w-full px-4 py-3 bg-white border-2 border-green-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200"
-                    />
-                  </div>
+                  <DatePicker
+                    label="من تاريخ"
+                    value={dateRange.startDate}
+                    onChange={(date) => handleDateRangeChange('startDate', date)}
+                    placeholder="اختر تاريخ البداية"
+                    className="border-2 border-green-200 focus:ring-green-500 focus:border-green-500"
+                  />
+                  <DatePicker
+                    label="إلى تاريخ"
+                    value={dateRange.endDate}
+                    onChange={(date) => handleDateRangeChange('endDate', date)}
+                    placeholder="اختر تاريخ النهاية"
+                    minDate={dateRange.startDate}
+                    className="border-2 border-green-200 focus:ring-green-500 focus:border-green-500"
+                  />
                 </div>
               </div>
 

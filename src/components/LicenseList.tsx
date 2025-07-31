@@ -8,6 +8,7 @@ import { Search, Filter, Edit, Trash2, FileText, Download, X, FileEdit } from 'l
 import { LicenseService } from '../services/licenseService';
 import { EmployeeService } from '../services/employeeService';
 import { License, Employee, FilterOptions } from '../types';
+import DatePicker from './DatePicker';
 import { CATEGORY_ORDER, OFFICER_RANK_ORDER, NCO_RANK_ORDER } from '../utils/sorting';
 
 
@@ -176,13 +177,12 @@ const EditLicenseModal: React.FC<EditLicenseModalProps> = ({ license, employees,
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-secondary-700 mb-2">تاريخ الرخصة</label>
-              <input
-                type="date"
-                name="license_date"
+              <DatePicker
+                label="تاريخ الرخصة"
                 value={formData.license_date || ''}
-                onChange={handleInputChange}
-                className="input-field text-right"
+                onChange={(date) => setFormData(prev => ({ ...prev, license_date: date }))}
+                placeholder="اختر التاريخ"
+                required
               />
             </div>
             <div className="modal-footer">

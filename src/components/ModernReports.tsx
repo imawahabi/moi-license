@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { FileText, Calendar, Users, Filter, Download, Printer, Eye, ChevronLeft, CheckCircle } from 'lucide-react';
 import Select from 'react-select';
+import DatePicker from './DatePicker';
 import { EmployeeService } from '../services/employeeService';
 import { LicenseService } from '../services/licenseService';
 import { Employee, License } from '../types';
@@ -442,31 +443,27 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-3">من تاريخ</label>
-                    <input
-                      type="date"
-                      value={reportConfig.dateRange.startDate}
-                      onChange={(e) => setReportConfig(prev => ({ 
-                        ...prev, 
-                        dateRange: { ...prev.dateRange, startDate: e.target.value }
-                      }))}
-                      className="w-full px-4 py-3 text-right border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-3">إلى تاريخ</label>
-                    <input
-                      type="date"
-                      value={reportConfig.dateRange.endDate}
-                      onChange={(e) => setReportConfig(prev => ({ 
-                        ...prev, 
-                        dateRange: { ...prev.dateRange, endDate: e.target.value }
-                      }))}
-                      className="w-full px-4 py-3 text-right border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                    />
-                  </div>
+                  <DatePicker
+                    label="من تاريخ"
+                    value={reportConfig.dateRange.startDate}
+                    onChange={(date) => setReportConfig(prev => ({
+                      ...prev,
+                      dateRange: { ...prev.dateRange, startDate: date }
+                    }))}
+                    placeholder="اختر تاريخ البداية"
+                    required
+                  />
+                  <DatePicker
+                    label="إلى تاريخ"
+                    value={reportConfig.dateRange.endDate}
+                    onChange={(date) => setReportConfig(prev => ({
+                      ...prev,
+                      dateRange: { ...prev.dateRange, endDate: date }
+                    }))}
+                    placeholder="اختر تاريخ النهاية"
+                    minDate={reportConfig.dateRange.startDate}
+                    required
+                  />
                 </div>
               </div>
             )}
@@ -590,86 +587,48 @@ const ModernReports: React.FC<ModernReportsProps> = ({ onNavigate }) => {
                   </p>
                 </div>
 
-                {/* Statistics Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
-                    <div className="flex items-center justify-between mb-3">
-                      <Users className="w-8 h-8 text-blue-100" />
-                      <div className="text-right">
-                        <div className="text-3xl font-bold">{reportData.length}</div>
-                        <div className="text-blue-100 text-sm font-medium">موظف</div>
-                      </div>
+                {/* Simplified Report Summary */}
+                <div className="bg-white rounded-2xl p-8 border border-gray-200 shadow-sm">
+                  <div className="text-center mb-8">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl mb-4">
+                      <FileText className="w-8 h-8 text-white" />
                     </div>
-                    <div className="text-blue-100 text-sm">إجمالي الموظفين في التقرير</div>
+                    <h4 className="text-2xl font-bold text-gray-800 mb-2">التقرير جاهز للمراجعة</h4>
+                    <p className="text-gray-600">
+                      تم إعداد التقرير بنجاح ويحتوي على {reportData.length} موظف و {reportData.reduce((sum, emp) => sum + emp.fullDays + emp.halfDays, 0)} رخصة
+                    </p>
                   </div>
 
-                  <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
-                    <div className="flex items-center justify-between mb-3">
-                      <FileText className="w-8 h-8 text-green-100" />
-                      <div className="text-right">
-                        <div className="text-3xl font-bold">{reportData.reduce((sum, emp) => sum + emp.fullDays + emp.halfDays, 0)}</div>
-                        <div className="text-green-100 text-sm font-medium">رخصة</div>
+                  {/* Report Details */}
+                  <div className="bg-gray-50 rounded-xl p-6 mb-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-gray-600">العنوان:</span>
+                          <span className="text-gray-800 text-right font-semibold">
+                            {reportConfig.title || 'تقرير متابعة موظفي إدارة السجل العام'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-gray-600">الفترة:</span>
+                          <span className="text-gray-800 text-right">
+                            {new Date(reportConfig.dateRange.startDate).toLocaleDateString('ar-US')} - {new Date(reportConfig.dateRange.endDate).toLocaleDateString('ar-US')}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-green-100 text-sm">إجمالي الرخص المسجلة</div>
-                  </div>
-
-                  <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
-                    <div className="flex items-center justify-between mb-3">
-                      <Calendar className="w-8 h-8 text-orange-100" />
-                      <div className="text-right">
-                        <div className="text-3xl font-bold">{reportData.reduce((sum, emp) => sum + emp.fullDays, 0)}</div>
-                        <div className="text-orange-100 text-sm font-medium">يوم كامل</div>
-                      </div>
-                    </div>
-                    <div className="text-orange-100 text-sm">رخص الأيام الكاملة</div>
-                  </div>
-
-                  <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
-                    <div className="flex items-center justify-between mb-3">
-                      <Filter className="w-8 h-8 text-purple-100" />
-                      <div className="text-right">
-                        <div className="text-3xl font-bold">{reportData.reduce((sum, emp) => sum + emp.halfDays, 0)}</div>
-                        <div className="text-purple-100 text-sm font-medium">نصف يوم</div>
-                      </div>
-                    </div>
-                    <div className="text-purple-100 text-sm">رخص أنصاف الأيام</div>
-                  </div>
-                </div>
-
-                {/* Report Summary */}
-                <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-6 border border-gray-200">
-                  <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    <Eye className="w-5 h-5" />
-                    ملخص التقرير
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-600">العنوان:</span>
-                        <span className="text-gray-800 text-right font-semibold">
-                          {reportConfig.title || 'تقرير متابعة موظفي إدارة السجل العام'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-600">الفترة:</span>
-                        <span className="text-gray-800 text-right">
-                          {new Date(reportConfig.dateRange.startDate).toLocaleDateString('ar-US')} - {new Date(reportConfig.dateRange.endDate).toLocaleDateString('ar-US')}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-600">الفئات:</span>
-                        <span className="text-gray-800 text-right">
-                          {reportConfig.categories.length > 0 ? reportConfig.categories.join(' • ') : 'جميع الفئات'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-600">إجمالي الساعات:</span>
-                        <span className="text-gray-800 text-right font-semibold">
-                          {reportData.reduce((sum, emp) => sum + emp.totalHours, 0)} ساعة
-                        </span>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-gray-600">الفئات:</span>
+                          <span className="text-gray-800 text-right">
+                            {reportConfig.categories.length > 0 ? reportConfig.categories.join(' • ') : 'جميع الفئات'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-gray-600">إجمالي الساعات:</span>
+                          <span className="text-gray-800 text-right font-semibold">
+                            {reportData.reduce((sum, emp) => sum + emp.totalHours, 0)} ساعة
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
