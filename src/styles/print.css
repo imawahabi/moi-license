@@ -1,0 +1,158 @@
+/* Print Styles for Modern Reports */
+@media print {
+  /* Hide elements that shouldn't be printed */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Show elements only when printing */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Page setup */
+  @page {
+    size: A4;
+    margin: 4cm 1.75cm 0.5cm 1.75cm;
+    orientation: portrait;
+    /* Hide browser headers and footers */
+    @top-left { content: ""; }
+    @top-center { content: ""; }
+    @top-right { content: ""; }
+    @bottom-left { content: ""; }
+    @bottom-center { content: ""; }
+    @bottom-right { content: ""; }
+  }
+
+  /* Body styles for print */
+  body {
+    font-family: 'Cairo', 'Sultan Normal', 'Times New Roman', serif;
+    font-size: 12pt;
+    line-height: 1.4;
+    color: #000;
+    background: white;
+  }
+
+  /* Remove shadows and gradients */
+  * {
+    box-shadow: none !important;
+    background-image: none !important;
+    background: white !important;
+    color: #000 !important;
+  }
+
+  /* Table styles for print */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin: 0 !important;
+    page-break-inside: auto;
+  }
+
+  th, td {
+    border: 1px solid #000 !important;
+    padding: 8px !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+    font-size: 11pt !important;
+    background: white !important;
+    font-family: 'Sultan Normal', 'Times New Roman', serif !important;
+  }
+
+  th {
+    background: #f0f0f0 !important;
+    font-weight: normal !important;
+    font-size: 12pt !important;
+    font-family: 'Sultan Bold', 'Times New Roman', serif !important;
+  }
+
+  /* Header styles */
+  .print-only h1 {
+    font-size: 18pt !important;
+    font-weight: normal !important;
+    font-family: 'Sultan Bold', 'Times New Roman', serif !important;
+    text-align: center !important;
+    margin-bottom: 10pt !important;
+    color: #000 !important;
+  }
+
+  .print-only p {
+    font-size: 12pt !important;
+    font-family: 'Sultan Normal', 'Times New Roman', serif !important;
+    text-align: center !important;
+    margin: 5pt 0 !important;
+    color: #000 !important;
+  }
+
+  /* Remove rounded corners and modern styling */
+  * {
+    border-radius: 0 !important;
+  }
+
+  /* Ensure proper page breaks */
+  tr {
+    page-break-inside: avoid;
+  }
+
+  /* Remove hover effects */
+  tr:hover {
+    background: white !important;
+  }
+
+  /* Badge styles for print */
+  .bg-blue-100, .bg-green-100, .bg-yellow-100, .bg-gray-100 {
+    background: white !important;
+    border: 1px solid #000 !important;
+    padding: 2px 4px !important;
+    border-radius: 0 !important;
+  }
+
+  /* Number circles */
+  .w-8.h-8 {
+    width: auto !important;
+    height: auto !important;
+    background: white !important;
+    border: 1px solid #000 !important;
+    border-radius: 0 !important;
+    padding: 2px !important;
+  }
+
+  /* Hide browser elements and URLs */
+  html {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Remove any localhost links or browser info */
+  body::before,
+  body::after,
+  html::before,
+  html::after {
+    content: none !important;
+    display: none !important;
+  }
+
+  /* Hide any system generated content */
+  .print\\:hidden {
+    display: none !important;
+  }
+
+  /* Force hide browser generated headers/footers */
+  @media print {
+    @page :first {
+      margin-top: 0 !important;
+    }
+
+    body {
+      margin: 0 !important;
+      padding: 20px !important;
+    }
+  }
+}
+
+/* Screen-only styles */
+@media screen {
+  .print-only {
+    display: none !important;
+  }
+}
