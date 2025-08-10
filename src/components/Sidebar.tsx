@@ -1,17 +1,13 @@
 import React from 'react';
 import {
-  BarChart3,
   Users,
   FolderOpen,
-  BarChart4,
   PlusCircle,
-  ChevronLeft,
-  ChevronRight,
-  Home,
-  Settings,
-  Bell,
-  Zap,
-  FileBarChart
+  ChevronsLeft,
+  ChevronsRight,
+  FilePlus,
+  PieChart,
+  LayoutDashboard
 } from 'lucide-react';
 
 interface NavigationItem {
@@ -22,12 +18,12 @@ interface NavigationItem {
 }
 
 const navigation: NavigationItem[] = [
-  { id: 'dashboard', name: 'اللوحة الرئيسية', icon: BarChart3, category: 'main' },
+  { id: 'dashboard', name: 'اللوحة الرئيسية', icon: LayoutDashboard, category: 'main' },
   { id: 'add-license', name: 'إضافة استئذان جديد', icon: PlusCircle, category: 'main' },
   { id: 'licenses', name: 'سجلات الاستئذانات', icon: FolderOpen, category: 'main' },
   { id: 'employees', name: 'إدارة الموظفين', icon: Users, category: 'main' },
-  { id: 'reports', name: 'إنشاء تقرير جديد', icon: FileBarChart, category: 'management' },
-  { id: 'old-reports', name: 'التقارير الشاملة', icon: BarChart4, category: 'management' },
+  { id: 'reports', name: 'إنشاء تقرير جديد', icon: FilePlus, category: 'management' },
+  { id: 'old-reports', name: 'التقارير الشاملة', icon: PieChart, category: 'management' },
 ];
 
 const categoryLabels = {
@@ -61,14 +57,20 @@ export default function Sidebar({ isCollapsed, onToggle, currentPage, onPageChan
         {/* Toggle Button */}
         <button
           onClick={onToggle}
-          className="absolute -left-6 top-6 p-3 rounded-xl bg-white/90 border border-gray-300 shadow-xl hover:shadow-2xl transition-all duration-300 backdrop-blur-md hover:scale-110"
-          style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)' }}
+          className="absolute -left-5 top-4 group"
+          aria-label={isCollapsed ? 'فتح القائمة' : 'إغلاق القائمة'}
+          title={isCollapsed ? 'فتح القائمة' : 'إغلاق القائمة'}
         >
-          {isCollapsed ? (
-            <ChevronLeft className="h-5 w-5 text-blue-600" />
-          ) : (
-            <ChevronRight className="h-5 w-5 text-blue-600" />
-          )}
+          <span
+            className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/80 border border-blue-200 shadow-xl hover:shadow-2xl transition-all duration-300 backdrop-blur-md hover:-translate-x-0.5"
+            style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)' }}
+          >
+            {isCollapsed ? (
+              <ChevronsLeft className="h-5 w-5 text-blue-600 transition-transform duration-300" />
+            ) : (
+              <ChevronsRight className="h-5 w-5 text-blue-600 transition-transform duration-300" />
+            )}
+          </span>
         </button>
 
         <div className="h-full flex flex-col items-center justify-center p-4">
@@ -182,7 +184,7 @@ export default function Sidebar({ isCollapsed, onToggle, currentPage, onPageChan
           <div className="text-center">
             <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
               <p className="text-xs font-medium text-gray-700">الإصدار 1.0</p>
-              <p className="text-xs text-gray-500">نظام إدارة الاستئذانات</p>
+              <p className="text-xs text-gray-500">نظام متابعة الاستئذانات</p>
             </div>
           </div>
         ) : (

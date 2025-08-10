@@ -595,12 +595,27 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 الخادم يعمل على المنفذ ${PORT}`);
-  console.log(`🌐 الرابط: http://localhost:${PORT}`);
-  console.log('📁 قاعدة البيانات: JSON File');
-  console.log('📍 مسار قاعدة البيانات:', dbPath);
-  console.log('🏠 مجلد البيانات:', userDataPath);
-  console.log('🔧 البيئة:', process.env.NODE_ENV || 'production');
-  console.log('📦 مسار الموارد:', process.resourcesPath || 'غير محدد');
-});
+function startServer(port, attemptsLeft = 10) {
+  const server = app.listen(port, () => {
+    console.log(`🚀 الخادم يعمل على المنفذ ${port}`);
+    console.log(`🌐 الرابط: http://localhost:${port}`);
+    console.log('📁 قاعدة البيانات: JSON File');
+    console.log('📍 مسار قاعدة البيانات:', dbPath);
+    console.log('🏠 مجلد البيانات:', userDataPath);
+    console.log('🔧 البيئة:', process.env.NODE_ENV || 'production');
+    console.log('📦 مسار الموارد:', process.resourcesPath || 'غير محدد');
+  });
+
+  server.on('error', (err) => {
+    if (err && err.code === 'EADDRINUSE' && attemptsLeft > 0) {
+      console.warn(`⚠️ المنفذ ${port} مستخدم بالفعل. المحاولة على منفذ آخر...`);
+      const nextPort = port + 1;
+      setTimeout(() => startServer(nextPort, attemptsLeft - 1), 300);
+    } else {
+      console.error('❌ فشل تشغيل الخادم:', err);
+      process.exit(1);
+    }
+  });
+}
+
+startServer(PORT);

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
+import { CalendarDays, Clock3 } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,7 +12,7 @@ const getPageTitle = (activeTab: string): string => {
   const titles: Record<string, string> = {
     'dashboard': 'اللوحة الرئيسية',
     'modern-add-license': 'إضافة استئذان متطور',
-    'add-license': 'تسجيل استئذان تقليدي',
+    'add-license': 'تسجيل استئذان',
     'licenses': 'سجلات الاستئذانات',
     'employees': 'إدارة الموظفين',
     'reports': 'إنشاء تقرير جديد',
@@ -68,7 +69,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
         }`}
       >
         {/* Top Header with Live Clock */}
-        <header className="bg-white shadow-md border-b border-gray-200 px-6 py-4">
+        <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200 shadow-md px-6 py-3">
           <div className="flex items-center justify-between">
             <div className="mr-6">
               <h1 className="text-2xl font-bold text-gray-800">
@@ -79,32 +80,38 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
               </p>
             </div>
             <div className="relative">
-                <div className="flex items-center justify-center space-x-4 space-x-reverse">
-                  {/* التاريخ والوقت في سطر واحد */}
-                  <div className="text-center">
-                    <div className="text-md font-bold leading-tight flex items-center justify-center space-x-4 space-x-reverse">
-                      <span className="text-gray-800">
-                        {currentTime.toLocaleDateString('ar-US', {
-                          weekday: 'long',
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric'
-                        })}
-                      </span>
-                      <span className="text-gray-300">|</span>
-                      <span className="text-gray-600">
-                        {currentTime.toLocaleTimeString('ar-US', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          second: '2-digit',
-                          hour12: true
-                        })}
-                      </span>
-                    </div>
+              <div className="flex items-center gap-3">
+                {/* Date pill - hidden on very small screens */}
+                <div className="hidden sm:flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white/60 border border-gray-200 shadow-sm backdrop-blur-md">
+                  <CalendarDays className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-bold text-gray-700">
+                    {currentTime.toLocaleDateString('ar-us', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </span>
+                </div>
+
+                {/* Time pill */}
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/60 border border-gray-200 shadow-sm backdrop-blur-md">
+                  <Clock3 className="w-4 h-4 text-blue-600" />
+                  <span className="text-md font-bold text-gray-800">
+                    {currentTime.toLocaleTimeString('ar-us', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: true
+                    })}
+                  </span>
+                  <span className="inline-flex items-center justify-center w-6 h-6 text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg animate-pulse">
+                    {currentTime.toLocaleTimeString('ar-us', { second: '2-digit' })}
+                  </span>
                 </div>
               </div>
             </div>
-          </div>
+            </div>
+          
         </header>
 
         {/* Main Content */}
@@ -114,12 +121,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
 
         {/* Footer */}
         <footer className="bg-white border-t border-gray-200 px-6 py-4">
-          <div className="flex items-center justify-between text-sm text-gray-600">
+          <div className="flex items-center justify-center text-sm text-gray-600">
             <div>
-              <p>الإدارة العامة لمكتب وكيل الوزارة - وزارة الداخلية - دولة الكويت</p>
-            </div>
-            <div>
-              <p>© جميع الحقوق محفوظة - الإصدار 1.0</p>
+              <p>جميع الحقوق محفوظة - الإدارة العامة لمكتب وكيل الوزارة - إدارة السجل العام 2025</p>
             </div>
           </div>
         </footer>

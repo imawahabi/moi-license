@@ -18,7 +18,9 @@
     "electron:build:win": "npm run build && electron-builder --win",
     "dist": "npm run build && electron-builder --publish=never",
     "build:electron": "node build-electron.cjs",
-    "build:icons": "node build-icons.cjs"
+    "build:icons": "node build-icons.cjs",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:full": "npx concurrently \"npm:dev\" \"npm --prefix backend run dev\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.51.0",
