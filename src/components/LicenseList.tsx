@@ -8,8 +8,6 @@ import { Search, Filter, Edit, Trash2, FileText, Download, X, FileEdit } from 'l
 import { LicenseService } from '../services/licenseService';
 import { EmployeeService } from '../services/employeeService';
 import { License, Employee, FilterOptions } from '../types';
-import DatePicker from './DatePicker';
-import { CATEGORY_ORDER, OFFICER_RANK_ORDER, NCO_RANK_ORDER } from '../utils/sorting';
 
 // Helper function to calculate time since registration
 const getTimeSince = (createdAt: string) => {
@@ -33,7 +31,6 @@ const getTimeSince = (createdAt: string) => {
   const years = Math.floor(days / 365);
   return `منذ ${years} سنة`;
 };
-
 
 interface EditLicenseModalProps {
   license: License | null;
@@ -200,12 +197,14 @@ const EditLicenseModal: React.FC<EditLicenseModalProps> = ({ license, employees,
               </div>
             )}
             <div>
-              <DatePicker
-                label="تاريخ الاستئذان"
+              <label className="block text-sm font-medium text-secondary-700 mb-2">تاريخ الاستئذان</label>
+              <input
+                type="date"
+                name="license_date"
                 value={formData.license_date || ''}
-                onChange={(date) => setFormData(prev => ({ ...prev, license_date: date }))}
-                placeholder="اختر التاريخ"
+                onChange={handleInputChange}
                 required
+                className="input-field text-right"
               />
             </div>
             <div className="modal-footer">
@@ -265,7 +264,6 @@ const LicenseList: React.FC = () => {
   };
 
   const sortedAndFilteredLicenses = useMemo(() => {
-
     return licenses.filter(license => {
       const employee = license.employee;
       const searchLower = searchQuery.toLowerCase();
@@ -283,16 +281,10 @@ const LicenseList: React.FC = () => {
 
       return matchesSearch && matchesFilters;
     }).sort((a, b) => {
-      const getRankOrder = (rank: string, category: string) => {
-        if (category === 'ضابط') return OFFICER_RANK_ORDER[rank] ?? 99;
-        if (category === 'ضابط صف') return NCO_RANK_ORDER[rank] ?? 99;
-        return 99;
-      };
-
-      // Sort by creation date only (most recent first) - this is a chronological record page
-      const createdAtA = a.created_at ? new Date(a.created_at).getTime() : new Date(a.license_date).getTime();
-      const createdAtB = b.created_at ? new Date(b.created_at).getTime() : new Date(b.license_date).getTime();
-      return createdAtB - createdAtA;
+      // Sort by license date (most recent first)
+      const dateA = new Date(a.license_date).getTime();
+      const dateB = new Date(b.license_date).getTime();
+      return dateB - dateA;
     });
   }, [licenses, searchQuery, filters]);
 
@@ -696,7 +688,7 @@ const LicenseList: React.FC = () => {
             <div className="flex justify-center">
               <button
                 onClick={clearFilters}
-                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg text-sm"
+                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200"
               >
                 <X className="w-3.5 h-3.5" />
                 مسح جميع الفلاتر
@@ -815,7 +807,7 @@ const LicenseList: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 text-sm">
                           <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-medium">
-                            {getTimeSince(license.created_at || license.license_date)}
+                            {getTimeSince(license.license_date)}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-center">

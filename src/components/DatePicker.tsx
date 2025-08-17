@@ -79,38 +79,33 @@ const DatePicker: React.FC<DatePickerProps> = ({
       if (calendar && inputElement) {
         const rect = inputElement.getBoundingClientRect();
         const screenWidth = window.innerWidth;
-        const calendarWidth = 400; // العرض الجديد
-        const calendarHeight = 380;
+        const screenHeight = window.innerHeight;
+        // احصل على حجم الكالندر الفعلي إن أمكن لتجنب القيم الثابتة
+        const calendarWidth = calendar.offsetWidth || 400;
+        const calendarHeight = calendar.offsetHeight || 380;
 
-        // حساب الموضع الأفقي - وسط الحقل
+        // الموضع الأفقي: وسِّط تحت الحقل قدر الإمكان ثم قيّد ضمن الشاشة
         let left = rect.left + (rect.width / 2) - (calendarWidth / 2);
+        if (left + calendarWidth > screenWidth - 16) left = screenWidth - calendarWidth - 16;
+        if (left < 16) left = 16;
 
-        // التأكد من عدم تجاوز الحدود الأفقية
-        if (left + calendarWidth > screenWidth - 16) {
-          left = screenWidth - calendarWidth - 16;
-        }
-        if (left < 16) {
-          left = 16;
-        }
-
-        // حساب الموضع العمودي - أعلى الحقل بشكل افتراضي
-        let top = rect.top - calendarHeight - -50;
-
-        // إذا لم تكن هناك مساحة كافية أعلى، اعرضه أسفل
-        if (top < 16) {
-          top = rect.bottom + 8;
-          // إذا كان سيتجاوز أسفل الشاشة أيضاً، اعرضه في أفضل موضع ممكن
-          if (top + calendarHeight > window.innerHeight - 16) {
-            top = Math.max(16, window.innerHeight - calendarHeight - 16);
+        // الموضع العمودي: أسفل الحقل بشكل افتراضي
+        let top = rect.bottom + 8;
+        // إذا لم توجد مساحة كافية أسفل، اعرضه أعلى الحقل
+        if (top + calendarHeight > screenHeight - 16) {
+          top = rect.top - calendarHeight - 8;
+          // وإذا لم توجد مساحة كافية أيضاً، اختر أفضل موضع ممكن ضمن الشاشة
+          if (top < 16) {
+            top = Math.max(16, screenHeight - calendarHeight - 16);
           }
         }
 
-          calendar.style.position = 'fixed';
-          calendar.style.top = `${top}px`; // أو rect.top لو عايزه يطلع فوق
-          calendar.style.left = `${left}px`;
-          calendar.style.zIndex = '99999';
-          calendar.style.transform = 'none';
-          calendar.style.overflow = 'hidden';
+        calendar.style.position = 'fixed';
+        calendar.style.top = `${top}px`;
+        calendar.style.left = `${left}px`;
+        calendar.style.zIndex = '99999';
+        calendar.style.transform = 'none';
+        calendar.style.overflow = 'hidden';
       }
     }
   }, [isOpen]);
@@ -217,7 +212,7 @@ const DatePicker: React.FC<DatePickerProps> = ({
       )}
 
       <div
-        onClick={() => !disabled && setIsOpen(!isOpen)}
+        onMouseDown={(e) => { if (!disabled) { e.preventDefault(); setIsOpen(prev => !prev); } }}
         className={`text-right
           date-picker-input
           ${disabled ? 'disabled' : ''}
