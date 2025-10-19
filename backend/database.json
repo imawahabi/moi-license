@@ -973,6 +973,61 @@
       "year": 2025,
       "created_at": "2025-07-31T17:54:54.367Z",
       "updated_at": "2025-07-31T17:54:54.367Z"
+    },
+    {
+      "id": "375eb41f-897d-47b9-bc8f-6306d60d8486",
+      "employee_id": "88f03b2a-1e6c-455e-8547-bfe6d3daa29b",
+      "license_type": "نصف يوم",
+      "license_date": "2025-08-21",
+      "hours": 3,
+      "month": 8,
+      "year": 2025,
+      "created_at": "2025-08-21T08:17:03.464Z",
+      "updated_at": "2025-08-21T08:17:03.464Z"
+    },
+    {
+      "id": "e52f1e83-a8b4-40d3-9213-bc1666030844",
+      "employee_id": "88f03b2a-1e6c-455e-8547-bfe6d3daa29b",
+      "license_type": "نصف يوم",
+      "license_date": "2025-08-04",
+      "hours": 3,
+      "month": 8,
+      "year": 2025,
+      "created_at": "2025-08-21T08:17:31.704Z",
+      "updated_at": "2025-08-21T08:17:31.704Z"
+    },
+    {
+      "id": "f61f92d4-7a6e-47ae-b0a1-fbbb65b25676",
+      "employee_id": "88f03b2a-1e6c-455e-8547-bfe6d3daa29b",
+      "license_type": "نصف يوم",
+      "license_date": "2025-08-06",
+      "hours": 3,
+      "month": 8,
+      "year": 2025,
+      "created_at": "2025-08-21T08:17:37.560Z",
+      "updated_at": "2025-08-21T08:17:37.560Z"
+    },
+    {
+      "id": "05f9bef5-02bc-4dad-8092-1a8320f977f8",
+      "employee_id": "88f03b2a-1e6c-455e-8547-bfe6d3daa29b",
+      "license_type": "نصف يوم",
+      "license_date": "2025-08-31",
+      "hours": 3,
+      "month": 8,
+      "year": 2025,
+      "created_at": "2025-08-21T08:20:54.149Z",
+      "updated_at": "2025-08-21T08:20:54.149Z"
+    },
+    {
+      "id": "b718bed3-38d8-4308-9269-4519d8e5876a",
+      "employee_id": "24b7db04-1b0e-4aa6-86c1-80b4f88e6745",
+      "license_type": "يوم كامل",
+      "license_date": "2025-10-19",
+      "hours": null,
+      "month": 10,
+      "year": 2025,
+      "created_at": "2025-10-19T08:02:01.650Z",
+      "updated_at": "2025-10-19T08:02:01.650Z"
     }
   ]
 }

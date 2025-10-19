@@ -3,7 +3,7 @@ import Select from 'react-select';
 import { Search, FileText, Calendar, Users, AlertTriangle, CheckCircle, Clock, TrendingUp } from 'lucide-react';
 import { LicenseService } from '../services/licenseService';
 import { Employee, License } from '../types';
-import { CATEGORY_ORDER } from '../utils/sorting';
+import { CATEGORY_ORDER, sortEmployees, sortLicenses } from '../utils/sorting';
 
 // Constants for monthly limits
 const MONTHLY_LIMITS = {
@@ -184,7 +184,7 @@ const ReportsNew: React.FC = () => {
       });
     });
 
-    return stats.filter(stat => {
+    const filteredStats = stats.filter(stat => {
       // Apply filters
       if (filters.selectedEmployees.length > 0 && !filters.selectedEmployees.includes(stat.employee.id.toString())) {
         return false;
@@ -205,16 +205,22 @@ const ReportsNew: React.FC = () => {
       }
 
       return true;
-    }).sort((a, b) => {
-      // Sort by category first, then by name
-      const categoryA = CATEGORY_ORDER[a.employee.category] ?? 99;
-      const categoryB = CATEGORY_ORDER[b.employee.category] ?? 99;
+    });
+    
+    // استخدام وظيفة sortEmployees من ملف sorting.ts لترتيب الإحصائيات حسب الفئة والرتبة
+    return filteredStats.sort((a, b) => {
+      // استخدام نفس منطق الترتيب الموجود في وظيفة sortEmployees
+      const employeeA = a.employee;
+      const employeeB = b.employee;
       
+      const categoryA = CATEGORY_ORDER[employeeA.category] || 99;
+      const categoryB = CATEGORY_ORDER[employeeB.category] || 99;
+
       if (categoryA !== categoryB) {
         return categoryA - categoryB;
       }
       
-      return a.employee.full_name.localeCompare(b.employee.full_name, 'ar');
+      return employeeA.full_name.localeCompare(employeeB.full_name, 'ar');
     });
   }, [uniqueEmployees, licenses, filters, searchTerm]);
 

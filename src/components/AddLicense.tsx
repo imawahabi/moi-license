@@ -151,34 +151,28 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
     const warnings: string[] = [];
 
     if (licenseConfig.licenseType === 'يوم كامل') {
-      if (stats.remainingFullDays < 0) {
-        warnings.push(`تم تجاوز الحد الأقصى للاستئذانات الطويلة هذا الشهر (${MONTHLY_LIMITS.FULL_DAY_LICENSES} استئذانات)`);
-      } else if (stats.remainingFullDays === 0) {
-        warnings.push(`وصل للحد الأقصى للاستئذانات الطويلة هذا الشهر (${MONTHLY_LIMITS.FULL_DAY_LICENSES} استئذانات)`);
+      if (stats.fullDayLicenses >= MONTHLY_LIMITS.FULL_DAY_LICENSES) {
+        warnings.push(`وصل للحد الأقصى للاستئذانات الطويلة (${MONTHLY_LIMITS.FULL_DAY_LICENSES} استئذانات).`);
       } else if (stats.remainingFullDays === 1) {
-        warnings.push(`تحذير: متبقي استئذان طويل واحد فقط هذا الشهر`);
+        warnings.push(`تحذير: متبقي استئذان طويل واحد فقط.`);
       }
     } else if (licenseConfig.licenseType === 'نصف يوم' && licenseConfig.hours) {
-      // Check short licenses count
-      if (stats.remainingShortLicenses < 0) {
-        warnings.push(`تم تجاوز الحد الأقصى للاستئذانات القصيرة هذا الشهر (${MONTHLY_LIMITS.SHORT_LICENSES} استئذانات)`);
-      } else if (stats.remainingShortLicenses === 0) {
-        warnings.push(`وصل للحد الأقصى للاستئذانات القصيرة هذا الشهر (${MONTHLY_LIMITS.SHORT_LICENSES} استئذانات)`);
-      }
+      const newTotalHours = stats.totalHours + (licenseConfig.hours || 0);
 
-      // Check hours limit
-      const newTotalHours = stats.totalHours + licenseConfig.hours;
+      // Critical warnings for exceeding limits
+      if (stats.shortLicenses >= MONTHLY_LIMITS.SHORT_LICENSES) {
+        warnings.push(`تم الوصول للحد الأقصى للاستئذانات القصيرة (${MONTHLY_LIMITS.SHORT_LICENSES}).`);
+      }
       if (newTotalHours > MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) {
-        const exceededHours = newTotalHours - MONTHLY_LIMITS.MAX_HOURS_PER_MONTH;
-        warnings.push(`تجاوز الحد الأقصى للساعات الشهرية بـ ${exceededHours} ساعة (الحد الأقصى: ${MONTHLY_LIMITS.MAX_HOURS_PER_MONTH} ساعة)`);
-      } else if (newTotalHours === MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) {
-        warnings.push(`وصل للحد الأقصى للساعات الشهرية (${MONTHLY_LIMITS.MAX_HOURS_PER_MONTH} ساعة)`);
-      } else if (stats.remainingHours < licenseConfig.hours) {
-        warnings.push(`تحذير: متبقي ${stats.remainingHours} ساعة فقط من الحد الشهري`);
+        warnings.push(`سيتم تجاوز الحد الأقصى للساعات (${MONTHLY_LIMITS.MAX_HOURS_PER_MONTH}).`);
       }
 
-      if (stats.remainingShortLicenses === 1) {
-        warnings.push(`تحذير: متبقي استئذان قصير واحد فقط هذا الشهر`);
+      // Informational warnings for approaching limits
+      if (stats.shortLicenses === MONTHLY_LIMITS.SHORT_LICENSES - 1) {
+        warnings.push('تحذير: سيتم استخدام آخر استئذان قصير متاح.');
+      }
+      if (newTotalHours === MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) {
+        warnings.push(`تحذير: سيتم الوصول إلى الحد الأقصى للساعات (${MONTHLY_LIMITS.MAX_HOURS_PER_MONTH}).`);
       }
     }
 
@@ -188,18 +182,17 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
   // Check if there are critical monthly limit violations
   const hasCriticalLimitViolation = useMemo(() => {
     if (!calculateEmployeeMonthlyStats) return false;
-
     const stats = calculateEmployeeMonthlyStats;
 
-    if (licenseConfig.licenseType === 'يوم كامل' && stats.remainingFullDays <= 0) {
-      return true;
+    if (licenseConfig.licenseType === 'يوم كامل') {
+      return stats.fullDayLicenses >= MONTHLY_LIMITS.FULL_DAY_LICENSES;
     }
 
     if (licenseConfig.licenseType === 'نصف يوم' && licenseConfig.hours) {
-      if (stats.remainingShortLicenses <= 0) return true;
-
-      const newTotalHours = stats.totalHours + licenseConfig.hours;
-      if (newTotalHours >= MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) return true;
+      // Block if already at the license limit
+      if (stats.shortLicenses >= MONTHLY_LIMITS.SHORT_LICENSES) return true;
+      // Block if adding the new license would exceed the hour limit
+      if (stats.totalHours + licenseConfig.hours > MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) return true;
     }
 
     return false;
@@ -245,7 +238,7 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
       }
 
       if (licenseConfig.licenseType === 'نصف يوم' && licenseConfig.hours) {
-        if (stats.remainingShortLicenses <= 0) {
+        if (stats.shortLicenses >= MONTHLY_LIMITS.SHORT_LICENSES) {
           setMessage({
             type: 'error',
             text: 'لا يمكن المتابعة. تم استنفاد الحد الأقصى للاستئذانات القصيرة هذا الشهر.'
@@ -254,10 +247,10 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
         }
 
         const newTotalHours = stats.totalHours + licenseConfig.hours;
-        if (newTotalHours >= MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) {
+        if (newTotalHours > MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) {
           setMessage({
             type: 'error',
-            text: `لا يمكن المتابعة. سيتم الوصول أو تجاوز الحد الأقصى للساعات الشهرية (${MONTHLY_LIMITS.MAX_HOURS_PER_MONTH} ساعة).`
+            text: `لا يمكن المتابعة. سيتم تجاوز الحد الأقصى للساعات الشهرية (${MONTHLY_LIMITS.MAX_HOURS_PER_MONTH} ساعة).`
           });
           return;
         }
@@ -321,7 +314,7 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
       }
 
       if (licenseConfig.licenseType === 'نصف يوم' && licenseConfig.hours) {
-        if (stats.remainingShortLicenses <= 0) {
+        if (stats.shortLicenses >= MONTHLY_LIMITS.SHORT_LICENSES) {
           setMessage({
             type: 'error',
             text: 'لا يمكن حفظ الرخصة. تم استنفاد الحد الأقصى للاستئذانات القصيرة هذا الشهر.'
@@ -330,10 +323,10 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
         }
 
         const newTotalHours = stats.totalHours + licenseConfig.hours;
-        if (newTotalHours >= MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) {
+        if (newTotalHours > MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) {
           setMessage({
             type: 'error',
-            text: `لا يمكن حفظ الرخصة. سيتم الوصول أو تجاوز الحد الأقصى للساعات الشهرية (${MONTHLY_LIMITS.MAX_HOURS_PER_MONTH} ساعة).`
+            text: `لا يمكن حفظ الرخصة. سيتم تجاوز الحد الأقصى للساعات الشهرية (${MONTHLY_LIMITS.MAX_HOURS_PER_MONTH} ساعة).`
           });
           return;
         }
@@ -621,16 +614,90 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                     {licenseConfig.licenseType === 'نصف يوم' && (
                       <div className="space-y-3">
                         <label className="block text-sm font-semibold text-gray-700">عدد ساعات الإستئذان *</label>
-                        <input
-                          type="number"
-                          value={licenseConfig.hours || ''}
-                          onChange={(e) => setLicenseConfig(prev => ({ ...prev, hours: parseInt(e.target.value) || undefined }))}
-                          placeholder="أدخل عدد الساعات"
-                          min="1"
-                          max="8"
-                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-right"
-                        />
-                        <p className="text-xs text-gray-500">الحد الأقصى 3 ساعات</p>
+                        <div className="flex flex-col space-y-2">
+                          <div className="flex items-center space-x-4 rtl:space-x-reverse">
+                            <span className="text-xs font-medium text-blue-600 w-10 text-center">0.5</span>
+                            <div className="relative flex-1">
+                              <input 
+                                type="range" 
+                                min="0.5" 
+                                max="12" 
+                                step="0.5" 
+                                value={licenseConfig.hours || 0.5}
+                                onChange={(e) => setLicenseConfig(prev => ({ ...prev, hours: parseFloat(e.target.value) }))}
+                                className="w-full h-2 bg-gray-200 rounded-full appearance-none cursor-pointer"
+                                style={{
+                                  background: `linear-gradient(to left, #3b82f6 ${((licenseConfig.hours || 0.5) - 0.5) / 11.5 * 100}%, #e5e7eb ${((licenseConfig.hours || 0.5) - 0.5) / 11.5 * 100}%)`
+                                }}
+                              />
+                              <div className="absolute -top-6 left-0 right-0 flex justify-center">
+                                <span className="px-2 py-1 text-xs font-bold text-white bg-blue-600 rounded-md shadow-md transform translate-x-1/2" 
+                                  style={{ right: `${((licenseConfig.hours || 0.5) - 0.5) / 11.5 * 100}%` }}>
+                                  {licenseConfig.hours || 0.5}
+                                </span>
+                              </div>
+                            </div>
+                            <span className="text-xs font-medium text-blue-600 w-10 text-center">12</span>
+                          </div>
+                          <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                            <div className="relative">
+                              <input
+                                type="number"
+                                min="0.5"
+                                max="12"
+                                step="0.5"
+                                value={licenseConfig.hours || ''}
+                                onChange={(e) => {
+                                  const value = parseFloat(e.target.value);
+                                  if (!isNaN(value) && value >= 0.5 && value <= 12) {
+                                    setLicenseConfig(prev => ({ ...prev, hours: value }));
+                                  } else if (e.target.value === '') {
+                                    setLicenseConfig(prev => ({ ...prev, hours: undefined }));
+                                  }
+                                }}
+                                className="w-24 px-3 py-2 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-center bg-blue-50"
+                                placeholder="ساعات"
+                              />
+                              <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-blue-500 font-bold text-xs">ساعة</span>
+                            </div>
+                            <div className="flex-1 text-center">
+                              <div className="text-sm font-medium text-gray-700 bg-blue-50 py-2 px-4 rounded-lg border border-blue-200 shadow-sm">
+                                {licenseConfig.hours ? (
+                                    <>
+                                      {licenseConfig.hours > 3 ? (
+                                        <div className="flex items-center justify-center space-x-2 rtl:space-x-reverse">
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                          </svg>
+                                          <span className="text-yellow-700 font-medium">تنبيه: مدة الإستئذان تتجاوز 3 ساعات</span>
+                                        </div>
+                                      ) : (
+                                         <div className="flex items-center justify-center space-x-2 rtl:space-x-reverse">
+                                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                           </svg>
+                                           <span className="text-green-700 font-medium">
+                                             {licenseConfig.hours === 0.5 && "نصف ساعة"}
+                                             {licenseConfig.hours === 1 && "ساعة واحدة"}
+                                             {licenseConfig.hours === 1.5 && "ساعة ونصف"}
+                                             {licenseConfig.hours === 2 && "ساعتان"}
+                                             {licenseConfig.hours === 2.5 && "ساعتان ونصف"}
+                                             {licenseConfig.hours > 2.5 && `${licenseConfig.hours} ساعات`}
+                                           </span>
+                                         </div>
+                                      )}
+                                    </>                                   ) : (
+                                    <div className="flex items-center justify-center space-x-2 rtl:space-x-reverse">
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                                      </svg>
+                                      <span className="text-blue-700 font-medium">الرجاء تحديد عدد ساعات الإستئذان</span>
+                                    </div>
+                                  )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
 

@@ -8,6 +8,7 @@ import { Search, Filter, Edit, Trash2, FileText, Download, X, FileEdit } from 'l
 import { LicenseService } from '../services/licenseService';
 import { EmployeeService } from '../services/employeeService';
 import { License, Employee, FilterOptions } from '../types';
+import { sortLicenses } from '../utils/sorting';
 
 // Helper function to calculate time since registration
 const getTimeSince = (createdAt: string) => {
@@ -264,7 +265,7 @@ const LicenseList: React.FC = () => {
   };
 
   const sortedAndFilteredLicenses = useMemo(() => {
-    return licenses.filter(license => {
+    const filteredLicenses = licenses.filter(license => {
       const employee = license.employee;
       const searchLower = searchQuery.toLowerCase();
 
@@ -280,11 +281,14 @@ const LicenseList: React.FC = () => {
         (!filters.year || license.year === Number(filters.year));
 
       return matchesSearch && matchesFilters;
-    }).sort((a, b) => {
-      // Sort by license date (most recent first)
-      const dateA = new Date(a.license_date).getTime();
-      const dateB = new Date(b.license_date).getTime();
-      return dateB - dateA;
+    });
+    
+    // ترتيب التراخيص حسب الأحدث (تاريخ الإنشاء)
+    return filteredLicenses.sort((a, b) => {
+      // ترتيب حسب تاريخ الإنشاء (الأحدث أولاً)
+      const dateA = new Date(a.created_at || a.license_date);
+      const dateB = new Date(b.created_at || b.license_date);
+      return dateB.getTime() - dateA.getTime();
     });
   }, [licenses, searchQuery, filters]);
 
@@ -690,7 +694,6 @@ const LicenseList: React.FC = () => {
                 onClick={clearFilters}
                 className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200"
               >
-                <X className="w-3.5 h-3.5" />
                 مسح جميع الفلاتر
               </button>
             </div>

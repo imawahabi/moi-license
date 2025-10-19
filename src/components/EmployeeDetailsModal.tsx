@@ -5,6 +5,7 @@ import SultanBold from '../assets/fonts/Sultan-bold-normal.js';
 import TimesBold from '../assets/fonts/Times-New-Roman-bold.js';
 import { Printer, FileText, X, BarChart3 } from 'lucide-react';
 import { Employee, License } from '../types';
+import { sortLicenses } from '../utils/sorting';
 
 interface EmployeeDetailsModalProps {
   employee: Employee;
@@ -213,13 +214,7 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ employee, l
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {currentMonthLicenses
-                      .sort((a: any, b: any) => {
-                        // Sort by creation date (most recent first), fallback to license_date if created_at is not available
-                        const createdAtA = a.created_at ? new Date(a.created_at).getTime() : new Date(a.license_date).getTime();
-                        const createdAtB = b.created_at ? new Date(b.created_at).getTime() : new Date(b.license_date).getTime();
-                        return createdAtB - createdAtA;
-                      })
+                    {sortLicenses(currentMonthLicenses)
                       .map((license: any, index) => (
                       <tr key={license.id} className="hover:bg-blue-50 transition-colors duration-200 group">
                         <td className="px-6 py-4 text-sm text-gray-900">

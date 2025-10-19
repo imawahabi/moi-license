@@ -177,7 +177,7 @@ const Dashboard: React.FC = () => {
       {/* Enhanced Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         {/* Current Month Stats */}
-        <div className="group relative bg-gradient-to-br from-blue-50 to-blue-100 rounded-3xl p-6 shadow-lg hover:shadow-2xl transition-all duration-500 border border-blue-200 hover:border-blue-300 hover:-translate-y-2">
+        <div className="group relative bg-gradient-to-br from-blue-50 to-blue-100 rounded-3xl p-6 shadow-lg hover:shadow-2xl border border-blue-200 hover:border-blue-300 hover:-translate-y-2">
           <div className="absolute top-4 right-4">
             <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
               <Calendar className="w-8 h-8 text-white" />
@@ -188,7 +188,7 @@ const Dashboard: React.FC = () => {
             <div className="text-lg font-semibold text-blue-700 mb-4">استئذانات الشهر الحالي</div>
             <div className="space-y-2">
               <div className="flex items-center justify-between bg-white/60 rounded-lg px-3 py-2">
-                <span className="text-sm font-medium text-blue-600">استئذانات طويلة</span>
+                <span className="text-sm font-medium text-blue-600">رخصة يوم كامل</span>
                 <span className="text-sm font-bold text-green-600">{currentMonthStats.fullDay}</span>
               </div>
               <div className="flex items-center justify-between bg-white/60 rounded-lg px-3 py-2">
@@ -361,7 +361,7 @@ const Dashboard: React.FC = () => {
                           {license.hours.toLocaleString('en')} ساعات
                         </span>
                       ) : (
-                        <span className="text-gray-400 font-medium">استئذان طويل</span>
+                        <span className="text-gray-400 font-medium">رخصة يوم كامل</span>
                       )}
                     </td>
                     <td className="px-6 py-4 text-sm">

@@ -5,7 +5,7 @@ import DatePicker from './DatePicker';
 
 import { LicenseService } from '../services/licenseService';
 import { License } from '../types';
-import { CATEGORY_ORDER, OFFICER_RANK_ORDER, NCO_RANK_ORDER } from '../utils/sorting';
+import { CATEGORY_ORDER, OFFICER_RANK_ORDER, NCO_RANK_ORDER, sortEmployees, sortLicenses } from '../utils/sorting';
 
 interface ReportConfig {
   title: string;
@@ -133,31 +133,34 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
       }
     });
     
-    return Array.from(employeeMap.values()).sort((a, b) => {
-      // استخدام نفس منطق الترتيب الموجود في utils/sorting.ts
-      const aCategoryOrder = CATEGORY_ORDER[a.employee.category] || 99;
-      const bCategoryOrder = CATEGORY_ORDER[b.employee.category] || 99;
+    const employeeReports = Array.from(employeeMap.values());
+    
+    // استخدام وظيفة sortEmployees من ملف sorting.ts لترتيب البيانات حسب الفئة والرتبة
+    return employeeReports.sort((a, b) => {
+      // استخدام نفس منطق الترتيب الموجود في وظيفة sortEmployees
+      const employeeA = a.employee;
+      const employeeB = b.employee;
+      
+      const categoryA = CATEGORY_ORDER[employeeA.category] || 99;
+      const categoryB = CATEGORY_ORDER[employeeB.category] || 99;
 
-      if (aCategoryOrder !== bCategoryOrder) {
-        return aCategoryOrder - bCategoryOrder;
+      if (categoryA !== categoryB) {
+        return categoryA - categoryB;
       }
 
-      // ترتيب الضباط حسب الرتبة (الأعلى أولاً)
-      if (a.employee.category === 'ضابط') {
-        const rankA = OFFICER_RANK_ORDER[a.employee.rank.replace(' حقوقي', '').trim()] || 999;
-        const rankB = OFFICER_RANK_ORDER[b.employee.rank.replace(' حقوقي', '').trim()] || 999;
+      if (employeeA.category === 'ضابط') {
+        const rankA = OFFICER_RANK_ORDER[employeeA.rank.replace(' حقوقي', '').trim()] || 99;
+        const rankB = OFFICER_RANK_ORDER[employeeB.rank.replace(' حقوقي', '').trim()] || 99;
         if (rankA !== rankB) return rankA - rankB;
       }
 
-      // ترتيب ضباط الصف حسب الرتبة (الأعلى أولاً)
-      if (a.employee.category === 'ضابط صف') {
-        const rankA = NCO_RANK_ORDER[a.employee.rank] || 999;
-        const rankB = NCO_RANK_ORDER[b.employee.rank] || 999;
+      if (employeeA.category === 'ضابط صف') {
+        const rankA = NCO_RANK_ORDER[employeeA.rank] || 99;
+        const rankB = NCO_RANK_ORDER[employeeB.rank] || 99;
         if (rankA !== rankB) return rankA - rankB;
       }
 
-      // ترتيب أبجدي للأسماء في حالة تساوي الرتب
-      return a.employee.full_name.localeCompare(b.employee.full_name, 'ar');
+      return employeeA.full_name.localeCompare(employeeB.full_name, 'ar');
     });
   }, [filteredLicenses]);
 
@@ -828,7 +831,7 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
       {/* Preview Modal */}
       {showPreviewModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
+          <div className="bg-white rounded-lg shadow-2xl max-w-5xl w-full max-h-[98vh] overflow-hidden">
             {/* Modal Header */}
             <div className="no-print bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-4 flex items-center justify-between">
               <h3 className="text-xl font-bold text-white">معاينة التقرير</h3>
