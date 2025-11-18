@@ -9,18 +9,21 @@ import { CATEGORY_ORDER, sortEmployees, sortLicenses } from '../utils/sorting';
 const MONTHLY_LIMITS = {
   FULL_DAY_LICENSES: 3,
   SHORT_LICENSES: 4,
-  MAX_HOURS_PER_MONTH: 12
+  MAX_HOURS_PER_MONTH: 12,
+  MEDICAL_LICENSES: Infinity // بدون حدود
 };
 
 interface MonthlyEmployeeStats {
   employee: Employee;
   fullDayLicenses: number;
   shortLicenses: number;
+  medicalLicenses: number;
   totalHours: number;
   remainingFullDays: number;
   remainingShortLicenses: number;
+  remainingMedicalLicenses: number;
   remainingHours: number;
-  isOverLimit: boolean;
+  status: 'safe' | 'warning' | 'danger';
   warnings: string[];
 }
 
@@ -53,11 +56,17 @@ const customSelectStyles = {
   }),
 };
 
+interface ReportStep {
+  id: number;
+  title: string;
+}
+
 const ReportsNew: React.FC = () => {
   const [licenses, setLicenses] = useState<License[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'overview' | 'monthly-limits' | 'detailed'>('overview');
+  const [currentStep, setCurrentStep] = useState(1);
   
   const currentDate = new Date();
   const currentYear = currentDate.getFullYear().toString();
@@ -138,12 +147,17 @@ const ReportsNew: React.FC = () => {
 
       let fullDayLicenses = 0;
       let shortLicenses = 0;
+      let medicalLicenses = 0;
       let totalHours = 0;
 
       employeeLicenses.forEach(license => {
-        if (license.hours && license.hours > 0) {
+        if (license.license_type === 'يوم كامل') {
+          fullDayLicenses++;
+        } else if (license.license_type === 'إستئذان قصير') {
           shortLicenses++;
-          totalHours += license.hours;
+          totalHours += license.hours || 0;
+        } else if (license.license_type === 'إستئذان طبي') {
+          medicalLicenses++;
         } else {
           fullDayLicenses++;
         }
@@ -151,35 +165,40 @@ const ReportsNew: React.FC = () => {
 
       const remainingFullDays = Math.max(0, MONTHLY_LIMITS.FULL_DAY_LICENSES - fullDayLicenses);
       const remainingShortLicenses = Math.max(0, MONTHLY_LIMITS.SHORT_LICENSES - shortLicenses);
+      const remainingMedicalLicenses = Math.max(0, MONTHLY_LIMITS.MEDICAL_LICENSES - medicalLicenses);
       const remainingHours = Math.max(0, MONTHLY_LIMITS.MAX_HOURS_PER_MONTH - totalHours);
 
       const warnings: string[] = [];
-      let isOverLimit = false;
+      let statusOverLimit: 'safe' | 'warning' | 'danger' = 'safe';
 
       if (fullDayLicenses > MONTHLY_LIMITS.FULL_DAY_LICENSES) {
         warnings.push(`تجاوز حد الاستئذانات الطويلة (${fullDayLicenses}/${MONTHLY_LIMITS.FULL_DAY_LICENSES})`);
-        isOverLimit = true;
+        statusOverLimit = 'danger';
       }
 
       if (shortLicenses > MONTHLY_LIMITS.SHORT_LICENSES) {
         warnings.push(`تجاوز حد الاستئذانات القصيرة (${shortLicenses}/${MONTHLY_LIMITS.SHORT_LICENSES})`);
-        isOverLimit = true;
+        statusOverLimit = 'danger';
       }
+
+      // الإستئذان الطبي بدون حدود - لا تحذيرات
 
       if (totalHours > MONTHLY_LIMITS.MAX_HOURS_PER_MONTH) {
         warnings.push(`تجاوز حد الساعات الشهرية (${totalHours}/${MONTHLY_LIMITS.MAX_HOURS_PER_MONTH})`);
-        isOverLimit = true;
+        statusOverLimit = 'danger';
       }
 
       stats.push({
         employee,
         fullDayLicenses,
         shortLicenses,
+        medicalLicenses,
         totalHours,
         remainingFullDays,
         remainingShortLicenses,
+        remainingMedicalLicenses,
         remainingHours,
-        isOverLimit,
+        status: statusOverLimit,
         warnings
       });
     });
@@ -227,9 +246,10 @@ const ReportsNew: React.FC = () => {
   // Overall statistics
   const overallStats = useMemo(() => {
     const totalEmployees = monthlyStats.length;
-    const employeesOverLimit = monthlyStats.filter(stat => stat.isOverLimit).length;
+    const employeesOverLimit = monthlyStats.filter(stat => stat.status === 'danger').length;
     const totalFullDayLicenses = monthlyStats.reduce((sum, stat) => sum + stat.fullDayLicenses, 0);
     const totalShortLicenses = monthlyStats.reduce((sum, stat) => sum + stat.shortLicenses, 0);
+    const totalMedicalLicenses = monthlyStats.reduce((sum, stat) => sum + stat.medicalLicenses, 0);
     const totalHours = monthlyStats.reduce((sum, stat) => sum + stat.totalHours, 0);
 
     return {
@@ -237,6 +257,7 @@ const ReportsNew: React.FC = () => {
       employeesOverLimit,
       totalFullDayLicenses,
       totalShortLicenses,
+      totalMedicalLicenses,
       totalHours,
       averageFullDayPerEmployee: totalEmployees > 0 ? (totalFullDayLicenses / totalEmployees).toFixed(1) : '0',
       averageShortPerEmployee: totalEmployees > 0 ? (totalShortLicenses / totalEmployees).toFixed(1) : '0',
@@ -263,27 +284,43 @@ const ReportsNew: React.FC = () => {
     );
   }
 
+  const reportSteps: ReportStep[] = [
+    { id: 1, title: 'تحديد المعايير' },
+    { id: 2, title: 'عرض البيانات' }
+  ];
+
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-800 rounded-xl shadow-lg p-6 text-white">
+      {/* Progress Bar */}
+      <div className="bg-white rounded-2xl shadow-md border border-gray-200 px-8 py-6">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <TrendingUp className="w-7 h-7 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">التقارير والإحصائيات المتقدمة</h1>
-              <p className="text-blue-100">
-                {getMonthName(filters.selectedMonth)} {filters.selectedYear} - 
-                إجمالي {overallStats.totalEmployees} موظف
-              </p>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="text-3xl font-bold">{overallStats.totalFullDayLicenses + overallStats.totalShortLicenses}</div>
-            <div className="text-blue-100 text-sm">إجمالي الرخص</div>
-          </div>
+          {reportSteps.map((step, index) => {
+            const isActive = currentStep === step.id;
+            const isCompleted = step.id < currentStep;
+            return (
+              <React.Fragment key={step.id}>
+                <div className="flex-1 flex flex-col items-center">
+                  <div
+                    className={`flex items-center justify-center w-9 h-9 rounded-full border-2 text-xs font-bold transition-all duration-300 ${
+                      isActive
+                        ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                        : isCompleted
+                          ? 'bg-green-50 border-green-500 text-green-700'
+                          : 'bg-gray-50 border-gray-300 text-gray-500'
+                    }`}
+                  >
+                    {isCompleted ? <CheckCircle className="w-4 h-4" /> : step.id}
+                  </div>
+                  <span className="mt-2 text-xs font-medium text-gray-700 text-center">
+                    {step.title}
+                  </span>
+                </div>
+                {index < reportSteps.length - 1 && (
+                  <div className="flex-1 h-px mx-2 bg-gradient-to-l from-gray-300 via-gray-200 to-gray-300" />
+                )}
+              </React.Fragment>
+            );
+          })}
         </div>
       </div>
 

@@ -12,9 +12,10 @@ export interface License {
   id: string;
   employee_id: string;
   employee?: Employee;
-  license_type: 'يوم كامل' | 'نصف يوم';
+  license_type: 'يوم كامل' | 'إستئذان قصير' | 'إستئذان طبي';
   license_date: string;
   hours?: number;
+  notes?: string;
   month: number;
   year: number;
   created_at: string;
@@ -25,6 +26,7 @@ export interface LicenseStats {
   total_licenses: number;
   full_day_licenses: number;
   hours_licenses: number;
+  medical_licenses: number;
   total_hours: number;
   most_active_month: string;
   most_active_employee: string;
@@ -49,6 +51,7 @@ export interface EmployeeLicenseStats {
   total: number;
   fullDay: number;
   halfDay: number;
+  medical: number;
   totalHours: number;
   month: string;
   year: number;

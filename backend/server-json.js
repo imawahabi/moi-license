@@ -418,7 +418,7 @@ app.get('/api/licenses/check-duplicate/:employeeId/:date', async (req, res) => {
 
 // إضافة رخصة جديدة
 app.post('/api/licenses', async (req, res) => {
-  const { employee_id, license_type, license_date, hours } = req.body;
+  const { employee_id, license_type, license_date, hours, notes } = req.body;
   
   // التحقق من البيانات المطلوبة
   if (!employee_id || !license_type || !license_date) {
@@ -426,7 +426,7 @@ app.post('/api/licenses', async (req, res) => {
   }
   
   // التحقق من صحة نوع الرخصة
-  if (!['يوم كامل', 'نصف يوم'].includes(license_type)) {
+  if (!['يوم كامل', 'إستئذان قصير', 'إستئذان طبي'].includes(license_type)) {
     return res.status(400).json({ error: 'نوع الرخصة غير صحيح' });
   }
   
@@ -454,6 +454,7 @@ app.post('/api/licenses', async (req, res) => {
       license_type,
       license_date,
       hours: hours || null,
+      notes: notes || '',
       month,
       year,
       created_at: new Date().toISOString(),
@@ -481,7 +482,7 @@ app.post('/api/licenses', async (req, res) => {
 
 // تحديث رخصة
 app.put('/api/licenses/:id', async (req, res) => {
-  const { employee_id, license_type, license_date, hours } = req.body;
+  const { employee_id, license_type, license_date, hours, notes } = req.body;
   
   try {
     const db = await readDB();
@@ -506,6 +507,7 @@ app.put('/api/licenses/:id', async (req, res) => {
       license_type,
       license_date,
       hours: hours || null,
+      notes: notes !== undefined ? notes : db.licenses[licenseIndex].notes || '',
       month,
       year,
       updated_at: new Date().toISOString()
@@ -555,7 +557,7 @@ app.get('/api/stats', async (req, res) => {
     
     const totalLicenses = db.licenses.length;
     const fullDayLicenses = db.licenses.filter(l => l.license_type === 'يوم كامل').length;
-    const hoursLicenses = db.licenses.filter(l => l.license_type === 'نصف يوم').length;
+    const hoursLicenses = db.licenses.filter(l => l.license_type === 'إستئذان قصير').length;
     const totalHours = db.licenses.reduce((sum, l) => sum + (l.hours || 0), 0);
     
     // الشهر الأكثر نشاطاً

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
-import { CalendarDays, Clock3 } from 'lucide-react';
+import { Clock3 } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -37,7 +37,7 @@ const getPageSubtitle = (activeTab: string): string => {
 };
 
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
@@ -48,16 +48,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
     return () => clearInterval(timer);
   }, []);
 
-  const handleToggleSidebar = () => {
-    setIsCollapsed(!isCollapsed);
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex">
+
       {/* Sidebar */}
       <Sidebar
         isCollapsed={isCollapsed}
-        onToggle={handleToggleSidebar}
+        onToggle={() => setIsCollapsed(!isCollapsed)}
         currentPage={activeTab}
         onPageChange={onTabChange}
       />
@@ -69,44 +67,68 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
         }`}
       >
         {/* Top Header with Live Clock */}
-        <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200 shadow-md px-6 py-3">
+        <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-lg border-b border-gray-100 shadow-sm px-6 py-3.5">
           <div className="flex items-center justify-between">
             <div className="mr-6">
-              <h1 className="text-2xl font-bold text-gray-800">
-                {getPageTitle(activeTab)}
-              </h1>
-              <p className="text-sm text-gray-600 mt-1">
-                {getPageSubtitle(activeTab)}
-              </p>
+              <div className="flex items-center gap-3">
+                <div className="w-1.5 h-8 bg-gradient-to-b from-blue-500 to-blue-600 rounded-full"></div>
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                    {getPageTitle(activeTab)}
+                  </h1>
+                  <p className="text-sm text-gray-500 mt-1 flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-200"></span>
+                    {getPageSubtitle(activeTab)}
+                  </p>
+                </div>
+              </div>
             </div>
             <div className="relative">
               <div className="flex items-center gap-3">
-                {/* Date pill - hidden on very small screens */}
-                <div className="hidden sm:flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white/60 border border-gray-200 shadow-sm backdrop-blur-md">
-                  <CalendarDays className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm font-bold text-gray-700">
-                    {currentTime.toLocaleDateString('ar-us', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
-                  </span>
-                </div>
+                {/* Date & Time Container */}
+                <div className="flex items-stretch overflow-hidden rounded-xl bg-white border border-gray-100 shadow-sm">
+                  {/* Date Section */}
+                  <div className="hidden sm:flex items-center gap-2 px-4 py-2.5 border-l border-gray-100">
+                    <div className="text-center">
+                      <div className="text-xs font-medium text-gray-500">
+                        {currentTime.toLocaleDateString('ar-us', { weekday: 'long' })}
+                      </div>
+                      <div className="text-sm font-bold text-gray-800">
+                        {currentTime.getDate()}
+                      </div>
+                    </div>
+                    <div className="h-8 w-px bg-gray-200 mx-1"></div>
+                    <div className="text-center">
+                      <div className="text-xs font-medium text-gray-500">
+                        {currentTime.toLocaleDateString('ar-us', { month: 'long' })}
+                      </div>
+                      <div className="text-sm font-bold text-gray-800">
+                        {currentTime.getFullYear()}
+                      </div>
+                    </div>
+                  </div>
 
-                {/* Time pill */}
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/60 border border-gray-200 shadow-sm backdrop-blur-md">
-                  <Clock3 className="w-4 h-4 text-blue-600" />
-                  <span className="text-md font-bold text-gray-800">
-                    {currentTime.toLocaleTimeString('ar-us', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      hour12: true
-                    })}
-                  </span>
-                  <span className="inline-flex items-center justify-center w-6 h-6 text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg animate-pulse">
-                    {currentTime.toLocaleTimeString('ar-us', { second: '2-digit' })}
-                  </span>
+                  {/* Time Section */}
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-50 to-white">
+                    <Clock3 className="w-4 h-4 text-blue-600" />
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-lg font-bold text-blue-700 tabular-nums">
+                        {currentTime.toLocaleTimeString('ar-us', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: false
+                        })}
+                      </span>
+                      <span className="text-xs font-medium text-blue-600">
+                        {currentTime.getHours() >= 12 ? 'م' : 'ص'}
+                      </span>
+                    </div>
+                    <div className="w-6 h-6 rounded-lg bg-blue-100 flex items-center justify-center ml-1">
+                      <span className="text-xs font-bold text-blue-700">
+                        {currentTime.getSeconds()}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

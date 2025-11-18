@@ -96,7 +96,7 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ employee, l
     sortedCurrentMonthLicenses.forEach((license: any, index) => {
       const licenseData = [
         index + 1,
-        license.license_type === 'يوم كامل' ? 'إستئذان طويل' : 'إستئذان قصير',
+        license.license_type === 'يوم كامل' ? 'رخصة يوم كامل' : license.license_type === 'إستئذان طبي' ? 'إستئذان طبي' : 'إستئذان قصير',
         formatDate(license.license_date),
         license.hours || '-',
         getTimeSince(license.created_at || license.license_date)
@@ -161,7 +161,7 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ employee, l
               <h4 className="font-bold text-lg text-gray-800">إحصائيات الشهر الحالي</h4>
             </div>
 
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
               <div className="bg-white/80 backdrop-blur-sm rounded-lg p-3 text-center">
                 <div className="text-xl font-bold text-blue-600 mb-1">{currentMonthLicenses.length}</div>
                 <div className="text-xs font-medium text-gray-700">إجمالي الإستئذانات</div>
@@ -170,17 +170,23 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ employee, l
                 <div className="text-xl font-bold text-green-600 mb-1">
                   {currentMonthLicenses.filter(l => l.license_type === 'يوم كامل').length}
                 </div>
-                <div className="text-xs font-medium text-gray-700">إستئذانات طويلة</div>
+                <div className="text-xs font-medium text-gray-700">رخص يوم كامل</div>
               </div>
               <div className="bg-white/80 backdrop-blur-sm rounded-lg p-3 text-center">
                 <div className="text-xl font-bold text-orange-600 mb-1">
-                  {currentMonthLicenses.filter(l => l.license_type === 'نصف يوم').length}
+                  {currentMonthLicenses.filter(l => l.license_type === 'إستئذان قصير').length}
                 </div>
                 <div className="text-xs font-medium text-gray-700">إستئذانات قصيرة</div>
               </div>
               <div className="bg-white/80 backdrop-blur-sm rounded-lg p-3 text-center">
                 <div className="text-xl font-bold text-purple-600 mb-1">
-                  {currentMonthLicenses.reduce((sum, l) => sum + (l.hours || 0), 0)}
+                  {currentMonthLicenses.filter(l => l.license_type === 'إستئذان طبي').length}
+                </div>
+                <div className="text-xs font-medium text-gray-700">إستئذانات طبية</div>
+              </div>
+              <div className="bg-white/80 backdrop-blur-sm rounded-lg p-3 text-center">
+                <div className="text-xl font-bold text-indigo-600 mb-1">
+                  {currentMonthLicenses.filter(l => l.license_type === 'إستئذان قصير').reduce((sum, l) => sum + (l.hours || 0), 0)}
                 </div>
                 <div className="text-xs font-medium text-gray-700">ساعات الإستئذانات القصيرة</div>
               </div>
@@ -226,9 +232,15 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ employee, l
                           <span className={`px-4 py-2 rounded-full text-xs font-bold shadow-sm ${
                             license.license_type === 'يوم كامل'
                               ? 'bg-green-100 text-green-800 border border-green-200'
+                              : license.license_type === 'إستئذان طبي'
+                              ? 'bg-purple-100 text-purple-800 border border-purple-200'
                               : 'bg-orange-100 text-orange-800 border border-orange-200'
                           }`}>
-                            {license.license_type === 'يوم كامل' ? 'إستئذان طويل' : 'إستئذان قصير'}
+                            {license.license_type === 'يوم كامل'
+                              ? 'رخصة يوم كامل'
+                              : license.license_type === 'إستئذان طبي'
+                              ? 'إستئذان طبي'
+                              : 'إستئذان قصير'}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-700 font-bold">
@@ -240,7 +252,13 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ employee, l
                               {license.hours} ساعات
                             </span>
                           ) : (
-                            <span className="text-gray-400 font-medium">إستئذان طويل</span>
+                            <span className="text-gray-500 font-medium">
+                              {license.license_type === 'يوم كامل'
+                                ? 'رخصة يوم كامل'
+                                : license.license_type === 'إستئذان طبي'
+                                ? 'إستئذان طبي'
+                                : 'بدون ساعات'}
+                            </span>
                           )}
                         </td>
                         <td className="px-6 py-4 text-sm">

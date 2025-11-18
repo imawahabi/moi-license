@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Users, Calendar, CheckCircle, ChevronLeft, Eye, FileText, AlertTriangle, Search, X } from 'lucide-react';
+import { Plus, Users, Calendar, CheckCircle, ChevronLeft, Eye, FileText, AlertTriangle, Search, X, UserPlus } from 'lucide-react';
 import { LicenseService } from '../services/licenseService';
 import { EmployeeService } from '../services/employeeService';
 import { Employee, License } from '../types';
@@ -9,16 +9,18 @@ import DatePicker from './DatePicker';
 const MONTHLY_LIMITS = {
   FULL_DAY_LICENSES: 3,
   SHORT_LICENSES: 4,
-  MAX_HOURS_PER_MONTH: 12
+  MAX_HOURS_PER_MONTH: 12,
+  MEDICAL_LICENSES: Infinity // بدون حدود
 };
 
 
 
 interface LicenseConfig {
   selectedEmployee: Employee | null;
-  licenseType: 'يوم كامل' | 'نصف يوم';
+  licenseType: 'يوم كامل' | 'إستئذان قصير' | 'إستئذان طبي';
   licenseDate: Date | null;
   hours?: number;
+  notes?: string;
 }
 
 interface LicenseStep {
@@ -47,7 +49,8 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
     selectedEmployee: null,
     licenseType: 'يوم كامل',
     licenseDate: new Date(),
-    hours: undefined
+    hours: undefined,
+    notes: ''
   });
 
 
@@ -102,23 +105,31 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
 
     let fullDayLicenses = 0;
     let shortLicenses = 0;
+    let medicalLicenses = 0;
     let totalHours = 0;
 
     employeeLicenses.forEach(license => {
-      if (license.hours && license.hours > 0) {
-        shortLicenses++;
-        totalHours += license.hours;
-      } else {
+      // فصل الأنواع الثلاثة بشكل صريح بناءً على نوع الرخصة فقط
+      if (license.license_type === 'يوم كامل') {
         fullDayLicenses++;
+      } else if (license.license_type === 'إستئذان قصير') {
+        shortLicenses++;
+        // ساعات الاستئذانات القصيرة فقط تدخل في حد 8 ساعة
+        totalHours += license.hours || 0;
+      } else if (license.license_type === 'إستئذان طبي') {
+        // الإستئذان الطبي تُحتسب بالعدد فقط، ولا تدخل ساعاتها في totalHours
+        medicalLicenses++;
       }
     });
 
     return {
       fullDayLicenses,
       shortLicenses,
+      medicalLicenses,
       totalHours,
       remainingFullDays: Math.max(0, MONTHLY_LIMITS.FULL_DAY_LICENSES - fullDayLicenses),
       remainingShortLicenses: Math.max(0, MONTHLY_LIMITS.SHORT_LICENSES - shortLicenses),
+      remainingMedicalLicenses: Math.max(0, MONTHLY_LIMITS.MEDICAL_LICENSES - medicalLicenses),
       remainingHours: Math.max(0, MONTHLY_LIMITS.MAX_HOURS_PER_MONTH - totalHours)
     };
   }, [licenseConfig.selectedEmployee, licenseConfig.licenseDate, licenses]);
@@ -156,7 +167,9 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
       } else if (stats.remainingFullDays === 1) {
         warnings.push(`تحذير: متبقي استئذان طويل واحد فقط.`);
       }
-    } else if (licenseConfig.licenseType === 'نصف يوم' && licenseConfig.hours) {
+    }
+    // الإستئذان الطبي بدون حدود - لا تحذيرات
+    else if (licenseConfig.licenseType === 'إستئذان قصير' && licenseConfig.hours) {
       const newTotalHours = stats.totalHours + (licenseConfig.hours || 0);
 
       // Critical warnings for exceeding limits
@@ -188,7 +201,12 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
       return stats.fullDayLicenses >= MONTHLY_LIMITS.FULL_DAY_LICENSES;
     }
 
-    if (licenseConfig.licenseType === 'نصف يوم' && licenseConfig.hours) {
+    // الإستئذان الطبي بدون حدود
+    if (licenseConfig.licenseType === 'إستئذان طبي') {
+      return false; // لا حدود
+    }
+
+    if (licenseConfig.licenseType === 'إستئذان قصير' && licenseConfig.hours) {
       // Block if already at the license limit
       if (stats.shortLicenses >= MONTHLY_LIMITS.SHORT_LICENSES) return true;
       // Block if adding the new license would exceed the hour limit
@@ -204,7 +222,11 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
       title: 'اختيار الموظف وتفاصيل الاستئذان',
       description: 'حدد الموظف والتاريخ ونوع الاستئذان',
       icon: <Users className="w-5 h-5" />,
-      completed: !!(licenseConfig.selectedEmployee && licenseConfig.licenseDate && (licenseConfig.licenseType === 'يوم كامل' || (licenseConfig.licenseType === 'نصف يوم' && licenseConfig.hours && licenseConfig.hours > 0)))
+      completed: !!(licenseConfig.selectedEmployee && licenseConfig.licenseDate && (
+        licenseConfig.licenseType === 'يوم كامل' || 
+        (licenseConfig.licenseType === 'إستئذان قصير' && licenseConfig.hours && licenseConfig.hours > 0) || 
+        (licenseConfig.licenseType === 'إستئذان طبي' && licenseConfig.hours && licenseConfig.hours > 0)
+      ))
     },
     {
       id: 2,
@@ -237,7 +259,7 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
         return;
       }
 
-      if (licenseConfig.licenseType === 'نصف يوم' && licenseConfig.hours) {
+      if (licenseConfig.licenseType === 'إستئذان قصير' && licenseConfig.hours) {
         if (stats.shortLicenses >= MONTHLY_LIMITS.SHORT_LICENSES) {
           setMessage({
             type: 'error',
@@ -268,6 +290,38 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
     }
   };
 
+  const handleCloseModal = () => {
+    // Reset form and close modal
+    setLicenseConfig({
+      selectedEmployee: null,
+      licenseType: 'يوم كامل',
+      licenseDate: new Date(),
+      hours: undefined,
+      notes: ''
+    });
+    setCurrentStep(1);
+    setSearchQuery('');
+    setMessage(null);
+    
+    // Remove the modal from DOM by reloading or navigating
+    // This is the smart way - just reload the page to go back to main view
+    window.location.href = window.location.pathname;
+  };
+
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state?.modalOpen) {
+        handleCloseModal();
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
+
   const handleEmployeeSelect = (employee: Employee) => {
     setLicenseConfig(prev => ({
       ...prev,
@@ -288,7 +342,7 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
       return;
     }
 
-    if (licenseConfig.licenseType === 'نصف يوم' && (!licenseConfig.hours || licenseConfig.hours <= 0)) {
+    if ((licenseConfig.licenseType === 'إستئذان قصير' || licenseConfig.licenseType === 'إستئذان طبي') && (!licenseConfig.hours || licenseConfig.hours <= 0)) {
       setMessage({ type: 'error', text: 'يرجى إدخال عدد الساعات' });
       return;
     }
@@ -313,7 +367,7 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
         return;
       }
 
-      if (licenseConfig.licenseType === 'نصف يوم' && licenseConfig.hours) {
+      if (licenseConfig.licenseType === 'إستئذان قصير' && licenseConfig.hours) {
         if (stats.shortLicenses >= MONTHLY_LIMITS.SHORT_LICENSES) {
           setMessage({
             type: 'error',
@@ -341,7 +395,8 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
         employee_id: licenseConfig.selectedEmployee.id,
         license_type: licenseConfig.licenseType,
         license_date: date.toISOString().split('T')[0],
-        hours: licenseConfig.licenseType === 'نصف يوم' ? licenseConfig.hours : undefined,
+        hours: (licenseConfig.licenseType === 'إستئذان قصير' || licenseConfig.licenseType === 'إستئذان طبي') ? licenseConfig.hours : undefined,
+        notes: licenseConfig.notes || '',
         month: date.getMonth() + 1,
         year: date.getFullYear(),
         reason: '',
@@ -360,10 +415,16 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
         selectedEmployee: null,
         licenseType: 'يوم كامل',
         licenseDate: new Date(),
-        hours: undefined
+        hours: undefined,
+        notes: ''
       });
       setCurrentStep(1);
       setSearchQuery('');
+
+      // Close modal after 2 seconds
+      setTimeout(() => {
+        window.history.back();
+      }, 2000);
     } catch (error) {
       console.error('Error submitting license:', error);
       setMessage({ type: 'error', text: 'حدث خطأ أثناء حفظ الرخصة' });
@@ -384,65 +445,98 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-200 to-gray-100 rounded-2xl">
-      <div className="max-w-4xl mx-auto px-6 py-8">
-        <div className="text-center mb-12">
-          <div className="flex justify-center items-center gap-4 mb-6">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl">
-              <Plus className="w-8 h-8 text-white" />
-            </div>
-
-          </div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">إضافة استئذان جديد</h1>
-          <p className="text-gray-600">نظام بسيط وسريع لإضافة استئذان لموظف واحد</p>
-        </div>
-
-        {message && (
-          <div className={`mb-6 p-8 rounded-xl border ${
-            message.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
-            message.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' :
-            'bg-yellow-50 border-yellow-200 text-yellow-800'
-          }`}>
-            <div className="flex items-center gap-2">
-              {message.type === 'success' ? <CheckCircle className="w-5 h-5" /> :
-               message.type === 'error' ? <X className="w-5 h-5" /> :
-               <AlertTriangle className="w-5 h-5" />}
-              <span className="font-bold">{message.text}</span>
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-center justify-center mb-12">
-          {steps.map((step, index) => (
-            <div key={step.id} className="flex items-center">
-              <div className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-300 ${
-                currentStep === step.id
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : step.completed
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-gray-100 text-gray-500'
-              }`}>
-                {step.completed ? (
-                  <CheckCircle className="w-5 h-5" />
-                ) : (
-                  step.icon
-                )}
-                <span className="font-medium">{step.title}</span>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm" dir="rtl">
+      {/* Modal Container */}
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col animate-fade-in">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-8 py-6 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
+                <Plus className="w-7 h-7 text-white" />
               </div>
-              {index < steps.length - 1 && (
-                <ChevronLeft className="w-5 h-5 text-gray-400 mx-2" />
-              )}
+              <div>
+                <h2 className="text-2xl font-bold text-white">
+                  إضافة استئذان جديد
+                </h2>
+                <p className="text-blue-100 text-sm mt-1">
+                  {currentStep === 1
+                    ? `${employees.length} موظف متاح`
+                    : 'مراجعة البيانات'}
+                </p>
+              </div>
             </div>
-          ))}
+            <button
+              onClick={handleCloseModal}
+              className="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-xl flex items-center justify-center transition-colors"
+            >
+              <X className="w-5 h-5 text-white" />
+            </button>
+          </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="px-8 py-8">
+        {/* Progress Steps */}
+        <div className="px-8 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+          <div className="flex items-center justify-between">
+            {steps.map((step, index) => (
+              <React.Fragment key={step.id}>
+                <div className="flex items-center flex-1">
+                  <div className={`flex items-center justify-center w-10 h-10 rounded-full transition-all duration-300 ${
+                    currentStep > step.id
+                      ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg'
+                      : currentStep === step.id
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md ring-4 ring-blue-200'
+                      : 'bg-gray-200 text-gray-500'
+                  }`}>
+                    {currentStep > step.id ? (
+                      <CheckCircle className="w-5 h-5" />
+                    ) : (
+                      <span className="text-sm font-bold">{step.id}</span>
+                    )}
+                  </div>
+                  <div className="flex-1 text-right mr-3">
+                    <h3 className={`font-semibold text-sm ${
+                      currentStep >= step.id ? 'text-blue-700' : 'text-gray-500'
+                    }`}>
+                      {step.title}
+                    </h3>
+                  </div>
+                </div>
+                {index < steps.length - 1 && (
+                  <div className={`flex-1 h-1 mx-3 rounded-full transition-all duration-300 ${
+                    currentStep > step.id
+                      ? 'bg-gradient-to-r from-blue-600 to-blue-700'
+                      : 'bg-gray-200'
+                  }`} />
+                )}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="px-8 py-6 space-y-6">
+            {message && (
+              <div className={`p-4 rounded-xl border ${
+                message.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
+                message.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' :
+                'bg-yellow-50 border-yellow-200 text-yellow-800'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {message.type === 'success' ? <CheckCircle className="w-5 h-5" /> :
+                   message.type === 'error' ? <X className="w-5 h-5" /> :
+                   <AlertTriangle className="w-5 h-5" />}
+                  <span className="font-bold">{message.text}</span>
+                </div>
+              </div>
+            )}
+
             {/* Step 1: Employee Selection and License Details */}
             {currentStep === 1 && (
               <div className="space-y-8">
                 <div className="text-center">
-                  <h2 className="text-2xl font-bold text-gray-800 mb-2">إضافة رخصة جديدة</h2>
+                  <h2 className="text-2xl font-bold text-gray-800 mb-2">إضافة رخصة / إستئذان جديدة</h2>
                   <p className="text-gray-600">اختر الموظف وحدد تفاصيل الرخصة</p>
                 </div>
 
@@ -480,9 +574,9 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                         <h3 className="font-semibold text-green-800">تسجيل رخصة لـ</h3>
                         <button
                           onClick={handleRemoveEmployee}
-                          className="flex items-center gap-2 px-3 py-1 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
+                          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg border border-red-300 font-medium text-sm"
                         >
-                          <X className="w-4 h-4" />
+                          <UserPlus className="w-4 h-4" />
                           اختيار موظف آخر
                         </button>
                       </div>
@@ -537,7 +631,7 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                                 <div className={`text-sm px-2 py-1 rounded-full ${
                                   employee.category === 'ضابط' ? 'bg-blue-100 text-blue-800' :
                                   employee.category === 'ضابط صف' ? 'bg-green-100 text-green-800' :
-                                  employee.category === 'مهني' ? 'bg-purple-100 text-purple-800' :
+                                  employee.category === 'مهني' ? 'bg-green-100 text-green-800' :
                                   'bg-gray-100 text-gray-800'
                                 }`}>
                                   {employee.category}
@@ -570,7 +664,7 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                     {/* License Type Selection */}
                     <div className="space-y-4">
                       <label className="block text-sm font-semibold text-gray-700">نوع الاستئذان *</label>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-3 gap-4">
                         <div
                           onClick={() => setLicenseConfig(prev => ({ ...prev, licenseType: 'يوم كامل', hours: undefined }))}
                           className={`p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 ${
@@ -580,126 +674,261 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                           }`}
                         >
                           <div className="text-center">
-                            <div className={`w-8 h-8 rounded-lg mx-auto mb-2 flex items-center justify-center ${
-                              licenseConfig.licenseType === 'يوم كامل' ? 'bg-blue-600' : 'bg-gray-400'
+                            <div className={`w-10 h-10 rounded-lg mx-auto mb-2 flex items-center justify-center ${
+                              licenseConfig.licenseType === 'يوم كامل' 
+                                ? 'bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg' 
+                                : 'bg-gray-200'
                             }`}>
-                              <Calendar className="w-4 h-4 text-white" />
+                              <Calendar className="w-5 h-5 text-white" />
                             </div>
-                            <div className="font-bold text-gray-800">إستئذان طويل</div>
-                            <div className="text-xs text-gray-600 mt-1">يوم كامل</div>
+                            <div className={`font-bold ${
+                              licenseConfig.licenseType === 'يوم كامل' ? 'text-blue-800' : 'text-gray-800'
+                            }`}>
+                              رخصة يوم كامل
+                            </div>
+                            <div className={`text-xs mt-1 ${
+                              licenseConfig.licenseType === 'يوم كامل' ? 'text-blue-600' : 'text-gray-500'
+                            }`}>
+                              يوم كامل
+                            </div>
                           </div>
                         </div>
                         <div
-                          onClick={() => setLicenseConfig(prev => ({ ...prev, licenseType: 'نصف يوم' }))}
+                          onClick={() => setLicenseConfig(prev => ({ ...prev, licenseType: 'إستئذان قصير' }))}
                           className={`p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 ${
-                            licenseConfig.licenseType === 'نصف يوم'
+                            licenseConfig.licenseType === 'إستئذان قصير'
                               ? 'border-blue-500 bg-blue-50 shadow-md'
                               : 'border-gray-200 hover:border-blue-300'
                           }`}
                         >
                           <div className="text-center">
-                            <div className={`w-8 h-8 rounded-lg mx-auto mb-2 flex items-center justify-center ${
-                              licenseConfig.licenseType === 'نصف يوم' ? 'bg-blue-600' : 'bg-gray-400'
+                            <div className={`w-10 h-10 rounded-lg mx-auto mb-2 flex items-center justify-center ${
+                              licenseConfig.licenseType === 'إستئذان قصير'
+                                ? 'bg-gradient-to-br from-blue-500 to-indigo-500 shadow-lg'
+                                : 'bg-gray-200'
                             }`}>
-                              <Calendar className="w-4 h-4 text-white" />
+                              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
                             </div>
-                            <div className="font-bold text-gray-800">إستئذان قصير</div>
-                            <div className="text-xs text-gray-600 mt-1">ساعات محددة</div>
+                            <div className={`font-bold ${
+                              licenseConfig.licenseType === 'إستئذان قصير' ? 'text-blue-800' : 'text-gray-800'
+                            }`}>
+                              إستئذان قصير
+                            </div>
+                            <div className={`text-xs mt-1 ${
+                              licenseConfig.licenseType === 'إستئذان قصير' ? 'text-blue-600' : 'text-gray-500'
+                            }`}>
+                              ساعات محددة
+                            </div>
+                          </div>
+                        </div>
+                        <div
+                          onClick={() => setLicenseConfig(prev => ({ ...prev, licenseType: 'إستئذان طبي' }))}
+                          className={`p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 ${
+                            licenseConfig.licenseType === 'إستئذان طبي'
+                              ? 'border-green-500 bg-green-50 shadow-md ring-2 ring-green-100'
+                              : 'border-gray-200 hover:border-green-300'
+                          }`}
+                        >
+                          <div className="text-center">
+                            <div className={`w-10 h-10 rounded-lg mx-auto mb-2 flex items-center justify-center ${
+                              licenseConfig.licenseType === 'إستئذان طبي' 
+                                ? 'bg-gradient-to-br from-green-500 to-green-600 shadow-lg' 
+                                : 'bg-gray-200'
+                            }`}>
+                              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                            </div>
+                            <div className={`font-bold ${
+                              licenseConfig.licenseType === 'إستئذان طبي' ? 'text-green-800' : 'text-gray-800'
+                            }`}>
+                              إستئذان طبي
+                            </div>
+                            <div className={`text-xs mt-1 ${
+                              licenseConfig.licenseType === 'إستئذان طبي' ? 'text-green-600' : 'text-gray-500'
+                            }`}>
+                              ساعات طبية محددة
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Hours Input (if half day) */}
-                    {licenseConfig.licenseType === 'نصف يوم' && (
-                      <div className="space-y-3">
-                        <label className="block text-sm font-semibold text-gray-700">عدد ساعات الإستئذان *</label>
+                    {/* Hours Input (if half day or medical) */}
+                    {(licenseConfig.licenseType === 'إستئذان قصير' || licenseConfig.licenseType === 'إستئذان طبي') && (
+                      <div className={`space-y-3 p-4 rounded-xl ${
+                        licenseConfig.licenseType === 'إستئذان طبي' 
+                          ? 'bg-green-50 border border-green-100' 
+                          : 'bg-blue-50 border border-blue-100'
+                      }`}>
+                        <label className="block text-sm font-semibold flex items-center">
+                          {licenseConfig.licenseType === 'إستئذان طبي' ? (
+                            <>
+                              <svg className="w-4 h-4 ml-1 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              عدد الساعات الطبية *
+                            </>
+                          ) : 'عدد ساعات الإستئذان *'}
+                        </label>
                         <div className="flex flex-col space-y-2">
                           <div className="flex items-center space-x-4 rtl:space-x-reverse">
-                            <span className="text-xs font-medium text-blue-600 w-10 text-center">0.5</span>
+                            <span className={`text-sm font-bold w-10 text-center ${
+                              licenseConfig.licenseType === 'إستئذان طبي' ? 'text-green-600' : 'text-blue-600'
+                            }`}>0.5</span>
                             <div className="relative flex-1">
                               <input 
                                 type="range" 
                                 min="0.5" 
-                                max="12" 
+                                max="8" 
                                 step="0.5" 
                                 value={licenseConfig.hours || 0.5}
                                 onChange={(e) => setLicenseConfig(prev => ({ ...prev, hours: parseFloat(e.target.value) }))}
-                                className="w-full h-2 bg-gray-200 rounded-full appearance-none cursor-pointer"
+                                className={`w-full h-2 rounded-full appearance-none cursor-pointer ${
+                                  licenseConfig.licenseType === 'إستئذان طبي' ? 'bg-green-200' : 'bg-blue-200'
+                                }`}
                                 style={{
-                                  background: `linear-gradient(to left, #3b82f6 ${((licenseConfig.hours || 0.5) - 0.5) / 11.5 * 100}%, #e5e7eb ${((licenseConfig.hours || 0.5) - 0.5) / 11.5 * 100}%)`
+                                  background: licenseConfig.licenseType === 'إستئذان طبي' 
+                                    ? `linear-gradient(to left, #34c475ff ${((licenseConfig.hours || 0.5) - 0.5) / 7.5 * 100}%, #d5ffe5ff ${((licenseConfig.hours || 0.5) - 0.5) / 7.5 * 100}%)`
+                                    : `linear-gradient(to left, #3b82f6 ${((licenseConfig.hours || 0.5) - 0.5) / 7.5 * 100}%, #e5ebe8ff ${((licenseConfig.hours || 0.5) - 0.5) / 7.5 * 100}%)`
                                 }}
                               />
                               <div className="absolute -top-6 left-0 right-0 flex justify-center">
-                                <span className="px-2 py-1 text-xs font-bold text-white bg-blue-600 rounded-md shadow-md transform translate-x-1/2" 
-                                  style={{ right: `${((licenseConfig.hours || 0.5) - 0.5) / 11.5 * 100}%` }}>
-                                  {licenseConfig.hours || 0.5}
+                                <span className={`px-2 py-1 text-xs font-bold text-white rounded-md shadow-md transform translate-x-1/2 ${
+                                  licenseConfig.licenseType === 'إستئذان طبي' ? 'bg-green-600' : 'bg-blue-600'
+                                }`} 
+                                  style={{ right: `${((licenseConfig.hours || 0.5) - 0.5) / 7.5 * 100}%` }}>
+                                  {licenseConfig.hours || 0.5} ساعة 
                                 </span>
                               </div>
                             </div>
-                            <span className="text-xs font-medium text-blue-600 w-10 text-center">12</span>
+                            <span className={`text-sm font-bold w-10 text-center ${
+                              licenseConfig.licenseType === 'إستئذان طبي' ? 'text-green-600' : 'text-blue-600'
+                            }`}>8</span>
                           </div>
                           <div className="flex items-center space-x-2 rtl:space-x-reverse">
                             <div className="relative">
                               <input
                                 type="number"
                                 min="0.5"
-                                max="12"
+                                max="8"
                                 step="0.5"
                                 value={licenseConfig.hours || ''}
                                 onChange={(e) => {
                                   const value = parseFloat(e.target.value);
-                                  if (!isNaN(value) && value >= 0.5 && value <= 12) {
+                                  if (!isNaN(value) && value >= 0.5 && value <= 8) {
                                     setLicenseConfig(prev => ({ ...prev, hours: value }));
                                   } else if (e.target.value === '') {
                                     setLicenseConfig(prev => ({ ...prev, hours: undefined }));
                                   }
                                 }}
-                                className="w-24 px-3 py-2 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-center bg-blue-50"
-                                placeholder="ساعات"
+                                className={`w-32 px-5 font-bold  py-3 border-2 rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 text-right ${
+                                  licenseConfig.licenseType === 'إستئذان طبي' 
+                                    ? 'border-green-200 bg-white focus:border-green-500 focus:ring-green-200' 
+                                    : 'border-blue-200 bg-white focus:border-blue-500 focus:ring-blue-200'
+                                }`}
+                                placeholder={licenseConfig.licenseType === 'إستئذان طبي' ? 'ساعات' : 'ساعات'}
                               />
-                              <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-blue-500 font-bold text-xs">ساعة</span>
+                              <span className={`absolute left-4 top-1/2 transform -translate-y-1/2 font-bold text-xs ${
+                                licenseConfig.licenseType === 'إستئذان طبي' ? 'text-green-500' : 'text-blue-500'
+                              }`}>ساعة</span>
                             </div>
-                            <div className="flex-1 text-center">
-                              <div className="text-sm font-medium text-gray-700 bg-blue-50 py-2 px-4 rounded-lg border border-blue-200 shadow-sm">
+                            <div className="flex-1">
+                              <div className={`text-sm font-medium py-4 px-4 rounded-lg border shadow-sm ${
+                                licenseConfig.licenseType === 'إستئذان طبي' 
+                                  ? 'bg-green-50 border-green-200 text-green-800' 
+                                  : 'bg-blue-50 border-blue-200 text-gray-700'
+                              }`}>
                                 {licenseConfig.hours ? (
-                                    <>
-                                      {licenseConfig.hours > 3 ? (
-                                        <div className="flex items-center justify-center space-x-2 rtl:space-x-reverse">
-                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                          </svg>
-                                          <span className="text-yellow-700 font-medium">تنبيه: مدة الإستئذان تتجاوز 3 ساعات</span>
-                                        </div>
-                                      ) : (
-                                         <div className="flex items-center justify-center space-x-2 rtl:space-x-reverse">
-                                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                           </svg>
-                                           <span className="text-green-700 font-medium">
-                                             {licenseConfig.hours === 0.5 && "نصف ساعة"}
-                                             {licenseConfig.hours === 1 && "ساعة واحدة"}
-                                             {licenseConfig.hours === 1.5 && "ساعة ونصف"}
-                                             {licenseConfig.hours === 2 && "ساعتان"}
-                                             {licenseConfig.hours === 2.5 && "ساعتان ونصف"}
-                                             {licenseConfig.hours > 2.5 && `${licenseConfig.hours} ساعات`}
-                                           </span>
-                                         </div>
-                                      )}
-                                    </>                                   ) : (
-                                    <div className="flex items-center justify-center space-x-2 rtl:space-x-reverse">
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                                      </svg>
-                                      <span className="text-blue-700 font-medium">الرجاء تحديد عدد ساعات الإستئذان</span>
-                                    </div>
-                                  )}
+                                  <div className="space-y-2">
+                                    {licenseConfig.licenseType === 'إستئذان طبي' ? (
+                                      <div className="flex items-center justify-center space-x-2 rtl:space-x-reverse">
+                                        <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        <span className="font-medium">
+                                          {licenseConfig.hours === 0.5 && "نصف ساعة طبية"}
+                                          {licenseConfig.hours === 1 && "ساعة طبية واحدة"}
+                                          {licenseConfig.hours === 1.5 && "ساعة ونصف طبية"}
+                                          {licenseConfig.hours === 2 && "ساعتان طبيتان"}
+                                          {licenseConfig.hours === 2.5 && "ساعتان ونصف طبية"}
+                                          {licenseConfig.hours > 2.5 && `${licenseConfig.hours} ساعات طبية`}
+                                        </span>
+                                      </div>
+                                    ) : licenseConfig.hours > 3 ? (
+                                      <div className="flex items-center justify-center space-x-2 rtl:space-x-reverse">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
+                                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                        </svg>
+                                        <span className="text-yellow-700 font-medium">تنبيه: مدة الإستئذان تتجاوز 3 ساعات</span>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center justify-center space-x-2 rtl:space-x-reverse">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                        <span className="text-green-700 font-medium">
+                                          {licenseConfig.hours === 0.5 && "نصف ساعة"}
+                                          {licenseConfig.hours === 1 && "ساعة واحدة"}
+                                          {licenseConfig.hours === 1.5 && "ساعة ونصف"}
+                                          {licenseConfig.hours === 2 && "ساعتان"}
+                                          {licenseConfig.hours === 2.5 && "ساعتان ونصف"}
+                                          {licenseConfig.hours > 2.5 && `${licenseConfig.hours} ساعات`}
+                                        </span>
+                                      </div>
+                                    )}
+
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-col items-center justify-center text-center h-8">
+
+                                    <span className={`${licenseConfig.licenseType === 'إستئذان طبي' ? 'text-green-700' : 'text-blue-700'}`}>
+                                      {licenseConfig.licenseType === 'إستئذان طبي' 
+                                        ? 'الرجاء تحديد عدد الساعات الطبية' 
+                                        : 'الرجاء تحديد عدد ساعات الإستئذان'}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
                         </div>
                       </div>
                     )}
+
+                    {/* Notes Input */}
+                    <div className={`space-y-3 p-4 rounded-xl ${
+                      licenseConfig.licenseType === 'إستئذان طبي' 
+                        ? 'bg-green-50 border border-green-100' 
+                        : 'bg-gray-50 border border-gray-100'
+                    }`}>
+                      <label className="block text-sm font-semibold flex items-center">
+                        {licenseConfig.licenseType === 'إستئذان طبي' ? (
+                          <>
+                            <svg className="w-4 h-4 ml-1 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            ملاحظات (اختياري)
+                          </>
+                        ) : 'ملاحظات (اختياري)'}
+                      </label>
+                      <textarea
+                        value={licenseConfig.notes || ''}
+                        onChange={(e) => setLicenseConfig(prev => ({ ...prev, notes: e.target.value }))}
+                        className={`w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 transition-all duration-200 min-h-[100px] ${
+                          licenseConfig.licenseType === 'إستئذان طبي'
+                            ? 'border-2 border-green-200 focus:border-green-500 focus:ring-green-200 bg-white'
+                            : 'border-2 border-gray-200 focus:border-blue-500 focus:ring-blue-200'
+                        }`}
+                        placeholder={
+                          licenseConfig.licenseType === 'إستئذان طبي'
+                            ? 'أدخل أي ملاحظات إضافية...'
+                            : 'أدخل أي ملاحظات إضافية...'
+                        }
+                      />
+                      </div>
 
                     {/* Duplicate Warning */}
                     {duplicateWarning && duplicateWarning.length > 0 && (
@@ -710,7 +939,7 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                           </div>
                           <div>
                             <h4 className="font-bold text-lg">تحذير: رخصة مكررة!</h4>
-                            <p className="text-sm">الموظف {licenseConfig.selectedEmployee?.full_name} لديه رخصة مسجلة مسبقاً في هذا التاريخ</p>
+                            <p className="text-sm"><span className="font-bold">{licenseConfig.selectedEmployee?.rank} / {licenseConfig.selectedEmployee?.full_name}</span> لديه رخصة مسجلة مسبقاً في هذا التاريخ</p>
                           </div>
                         </div>
       </div>
@@ -778,7 +1007,11 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                     <div className="bg-white p-4 rounded-xl border border-gray-200">
                       <div className="text-sm text-gray-500 mb-1">نوع الاستئذان</div>
                       <div className="font-bold text-gray-800 text-lg">
-                        {licenseConfig.licenseType === 'يوم كامل' ? 'إستئذان طويل' : 'إستئذان قصير'}
+                        {licenseConfig.licenseType === 'يوم كامل' 
+                          ? 'رخصة يوم كامل' 
+                          : licenseConfig.licenseType === 'إستئذان طبي'
+                          ? 'إستئذان طبي'
+                          : 'إستئذان قصير'}
                       </div>
                     </div>
 
@@ -804,11 +1037,11 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                       </div>
                       <div>
                         <h4 className="font-bold text-xl">خطأ: لا يمكن إضافة الرخصة!</h4>
-                        <p className="text-sm">الموظف {licenseConfig.selectedEmployee?.full_name} لديه رخصة مسجلة مسبقاً في هذا التاريخ</p>
+                        <p className="text-sm"><span className="font-bold">{licenseConfig.selectedEmployee?.rank} / {licenseConfig.selectedEmployee?.full_name}</span> لديه رخصة مسجلة مسبقاً في هذا التاريخ</p>
                       </div>
                     </div>
                     <div className="bg-white rounded-lg p-4 border border-red-200">
-                      <p className="text-red-700 font-medium mb-3">تفاصيل الرخصة الموجودة للموظف {licenseConfig.selectedEmployee?.full_name} في تاريخ {licenseConfig.licenseDate?.toLocaleDateString('ar-US', {
+                      <p className="text-red-700 font-medium mb-3">تفاصيل الرخصة الموجودة لـ <span className="font-bold">{licenseConfig.selectedEmployee?.rank} / {licenseConfig.selectedEmployee?.full_name}</span> في تاريخ {licenseConfig.licenseDate?.toLocaleDateString('ar-US', {
                         year: 'numeric',
                         month: 'long',
                         day: 'numeric'
@@ -871,10 +1104,10 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                     {calculateEmployeeMonthlyStats && (
                       <div className="mt-4 bg-white rounded-lg p-4 border border-yellow-200">
                         <h5 className="font-semibold text-yellow-800 mb-3">إحصائيات {licenseConfig.selectedEmployee?.full_name} للشهر الحالي:</h5>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
                           <div className="text-center p-3 bg-gray-50 rounded-lg">
                             <div className="font-bold text-xl text-gray-800">{calculateEmployeeMonthlyStats.fullDayLicenses}</div>
-                            <div className="text-gray-600 font-medium">استئذانات طويلة</div>
+                            <div className="text-gray-600 font-medium">رخصة يوم كامل</div>
                             <div className="text-xs text-green-600 mt-1">متبقي: {calculateEmployeeMonthlyStats.remainingFullDays} من {MONTHLY_LIMITS.FULL_DAY_LICENSES}</div>
                           </div>
                           <div className="text-center p-3 bg-gray-50 rounded-lg">
@@ -883,9 +1116,14 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                             <div className="text-xs text-green-600 mt-1">متبقي: {calculateEmployeeMonthlyStats.remainingShortLicenses} من {MONTHLY_LIMITS.SHORT_LICENSES}</div>
                           </div>
                           <div className="text-center p-3 bg-gray-50 rounded-lg">
-                            <div className="font-bold text-xl text-gray-800">{calculateEmployeeMonthlyStats.totalHours}</div>
+                            <div className="font-bold text-xl text-gray-800">{calculateEmployeeMonthlyStats.totalHours.toFixed(2)}</div>
                             <div className="text-gray-600 font-medium">إجمالي الساعات</div>
                             <div className="text-xs text-green-600 mt-1">متبقي: {calculateEmployeeMonthlyStats.remainingHours} من {MONTHLY_LIMITS.MAX_HOURS_PER_MONTH} ساعة</div>
+                          </div>
+                          <div className="text-center p-3 bg-green-50 rounded-lg border border-green-200">
+                            <div className="font-bold text-xl text-green-800">{calculateEmployeeMonthlyStats.medicalLicenses}</div>
+                            <div className="text-green-600 font-medium">إستئذان طبي</div>
+                            <div className="text-xs text-green-600 mt-1">بدون حدود ✓</div>
                           </div>
                         </div>
                       </div>
@@ -919,31 +1157,20 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
                     )}
                   </button>
                 </div>
-
-                {/* Back Button */}
-                <div className="text-center pt-4">
-                  <button
-                    onClick={handleBack}
-                    className="flex items-center gap-2 px-6 py-3 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-xl transition-all duration-200 mx-auto border border-gray-200 hover:border-gray-300"
-                  >
-                    <ChevronLeft className="w-4 h-4 rotate-180" />
-                    العودة للخطوة السابقة
-                  </button>
-                </div>
               </div>
             )}
           </div>
 
           {/* Navigation - Hidden in step 2 */}
           {currentStep < 2 && (
-            <div className="px-8 py-6 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+            <div className="px-8 py-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-t border-blue-100 flex items-center justify-between">
               <button
                 onClick={handleBack}
                 disabled={currentStep === 1}
                 className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
                   currentStep === 1
                     ? 'text-gray-400 cursor-not-allowed'
-                    : 'text-gray-600 hover:text-gray-800 hover:bg-gray-200'
+                    : 'text-white bg-blue-600 hover:bg-blue-700 shadow-md'
                 }`}
               >
                 <ChevronLeft className="w-4 h-4 rotate-180" />
@@ -953,19 +1180,54 @@ const AddLicense: React.FC<AddLicenseProps> = ({ onNavigate }) => {
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleNext}
-                  disabled={!steps[0].completed || !!(duplicateWarning && duplicateWarning.length > 0) || hasCriticalLimitViolation}
-                  className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
-                    steps[0].completed && !(duplicateWarning && duplicateWarning.length > 0) && !hasCriticalLimitViolation
+                  disabled={!licenseConfig.selectedEmployee || !!(duplicateWarning && duplicateWarning.length > 0) || hasCriticalLimitViolation}
+                  className={`flex items-center gap-2 px-8 py-3 rounded-xl font-medium transition-all duration-200 shadow-lg ${
+                    licenseConfig.selectedEmployee && !(duplicateWarning && duplicateWarning.length > 0) && !hasCriticalLimitViolation
                       ? monthlyLimitWarning
-                        ? 'bg-yellow-600 text-white hover:bg-yellow-700'
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                        ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white hover:from-yellow-600 hover:to-yellow-700'
+                        : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
                 >
                   التالي
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-5 h-5" />
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Step 2 Footer */}
+          {currentStep === 2 && (
+            <div className="px-8 py-6 bg-gradient-to-r from-green-50 to-emerald-50 border-t border-green-100 flex items-center justify-between">
+              <button
+                onClick={handleBack}
+                className="flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-white bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 shadow-md transition-all duration-200"
+              >
+                <ChevronLeft className="w-4 h-4 rotate-180" />
+                السابق
+              </button>
+
+              <button
+                onClick={handleSubmit}
+                disabled={loading}
+                className={`flex items-center gap-3 px-8 py-3 rounded-xl font-medium transition-all duration-200 shadow-lg ${
+                  loading
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700'
+                }`}
+              >
+                {loading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    جاري الإرسال...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-5 h-5" />
+                    حفظ الاستئذان
+                  </>
+                )}
+              </button>
             </div>
           )}
         </div>

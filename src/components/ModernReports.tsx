@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { FileText, Calendar, Users, Printer, Eye, ChevronLeft, CheckCircle } from 'lucide-react';
+import { FileText, Calendar, Users, Printer, Eye, ChevronLeft, CheckCircle, X } from 'lucide-react';
 import Select from 'react-select';
 import DatePicker from './DatePicker';
 
@@ -116,6 +116,7 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
           employee: license.employee,
           fullDays: 0,
           halfDays: 0,
+          medicalLicenses: 0,
           totalHours: 0,
           licenses: []
         });
@@ -126,10 +127,11 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
       
       if (license.license_type === 'يوم كامل') {
         data.fullDays += 1;
-        data.totalHours += 8;
-      } else if (license.license_type === 'نصف يوم') {
+      } else if (license.license_type === 'إستئذان قصير') {
         data.halfDays += 1;
-        data.totalHours += 4;
+        data.totalHours += license.hours || 0;
+      } else if (license.license_type === 'إستئذان طبي') {
+        data.medicalLicenses += 1;
       }
     });
     
@@ -183,6 +185,45 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
     }
   };
 
+  const handleCloseModal = () => {
+    // Reset form and close modal
+    setReportConfig({
+      title: '',
+      dateRange: {
+        startDate: (() => {
+          const now = new Date();
+          const year = now.getFullYear();
+          const month = String(now.getMonth() + 1).padStart(2, '0');
+          return `${year}-${month}-01`;
+        })(),
+        endDate: new Date().toISOString().split('T')[0]
+      },
+      categories: [],
+      includeDetails: false
+    });
+    setCurrentStep(1);
+    setShowReport(false);
+    setShowPreviewModal(false);
+    
+    // Remove the modal from DOM by reloading or navigating
+    // This is the smart way - just reload the page to go back to main view
+    window.location.href = window.location.pathname;
+  };
+
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state?.modalOpen) {
+        handleCloseModal();
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
+
 
 
   const handlePrint = () => {
@@ -196,12 +237,18 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>تقرير الطباعة</title>
+        <title></title>
         <style>
           @page {
             size: A4;
-            margin: 2.5cm 1.27cm 0.5cm 1.27cm;
+            margin: 2.5cm 1.27cm 1.5cm 1.27cm;
             orientation: portrait;
+            @top-left { content: none !important; }
+            @top-center { content: none !important; }
+            @top-right { content: none !important; }
+            @bottom-left { content: none !important; }
+            @bottom-center { content: none !important; }
+            @bottom-right { content: none !important; }
           }
 
           * {
@@ -256,49 +303,77 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
             font-weight:bold;
           }
 
+          .report-date-range {
+            color: #d00000;
+          }
+
           .report-categories {
             font-family: 'Sultan Bold', 'Times New Roman', serif;
             font-size: 18pt;
             color: #ff0000;
-            margin-bottom: 5px;
+            margin-bottom: 8px;
+          }
+
+          .table-wrapper {
+            width: 100%;
+            margin: 15px auto 0 auto;
           }
 
           table {
             width: 100%;
-            margin: 0 auto 0 auto;
+            border-collapse: collapse;
             direction: rtl;
+            table-layout: auto;
           }
 
           th, td {
-            border: 1px solid #000; /* حدود سميكة */
-            padding: 8px;
+            border: 1px solid #000;
+            padding: 6px 4px;
             text-align: center;
-            vertical-align: top;
+            vertical-align: middle;
             font-family: 'Sultan Normal', 'Times New Roman', serif;
-            font-size: 17pt;
+            font-size: 14pt;
           }
 
           th {
-            background: #e8e8e8;
+            background: #e0e0e0; /* رأس الجدول رمادي فاتح */
             font-family: 'Sultan Bold', 'Times New Roman', serif;
-            font-size: 17pt;
+            font-size: 15pt;
           }
 
-          /* لجعل حدود الخلايا الداخلية واضحة جداً */
-          table, th, td {
-            border-width: 2px;
-            border-style: solid;
-            border-collapse: collapse
-            border-color: #000;
+          thead tr {
+            border-bottom-width: 2px;
+          }
+
+          tbody tr:nth-child(even) {
+            background-color: #ffffff;
+          }
+
+          tbody tr:nth-child(odd) {
+            background-color: #ffffff;
+          }
+
+          tbody td:first-child {
+            background-color: #e0e0e0; /* عمود المسلسل رمادي فاتح بالكامل */
           }
 
           .number-cell {
+            font-family: 'Sultan Bold', 'Times New Roman', serif;
             font-weight: bold;
           }
 
           .employee-name {
             text-align: center;
-            font-weight: normal;
+            padding-right: 0;
+          }
+
+          .rank-cell {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+            text-align: center;
+            padding: 6px 8px;
           }
 
           @media print {
@@ -310,14 +385,18 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
             .report-header {
               padding-top: 0;
             }
+
+            .no-print {
+              display: none !important;
+            }
           }
         </style>
       </head>
       <body>
         <div class="content-wrapper">
           <div class="report-header">
-            <h1 class="report-title">${reportConfig.title || `تقرير متابعة موظفي إدارة السجل العام لسنة ${new Date(reportConfig.dateRange.startDate).getFullYear()}`}</h1>
-            <p class="report-date">من ${reportConfig.dateRange.startDate.replace(/-/g, '/')} إلى ${reportConfig.dateRange.endDate.replace(/-/g, '/')}</p>
+            <h1 class="report-title">${reportConfig.title || `تقرير متابعة موظفي إدارة السجل العام لسنة <b>${new Date(reportConfig.dateRange.startDate).getFullYear()}`}</b></h1>
+            <p class="report-date">من <span class="report-date-range">${reportConfig.dateRange.startDate.replace(/-/g, '/')}</span> إلى <span class="report-date-range">${reportConfig.dateRange.endDate.replace(/-/g, '/')}</span></p>
             ${reportConfig.categories.length > 0 ? `<p class="report-categories">( ${reportConfig.categories.map(cat => {
               if (cat === 'ضابط') return 'ضباط';
               if (cat === 'ضابط صف') return 'ضباط صف';
@@ -327,28 +406,32 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
             }).join(' / ')} )</p>` : ''}
           </div>
 
-          <table>
-          <thead class="background-color:#e8e8e8">
-            <tr>
-              <th>م</th>
-              <th>الرتبة</th>
-              <th>الاسم</th>
-              <th>رخصة ( يوم )</th>
-              <th>استئذان قصير</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${reportData.map((item, index) => `
-              <tr>
-                <td>${index + 1}</td>
-                <td>${(item.employee.category === 'ضابط' || item.employee.category === 'ضابط صف') ? item.employee.rank : item.employee.category}</td>
-                <td class="employee-name">${item.employee.full_name}</td>
-                <td class="number-cell">${item.fullDays}</td>
-                <td class="number-cell">${item.halfDays}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: auto; min-width: 40px">م</th>
+                  <th style="width: auto; min-width: 80px">الرتبة</th>
+                  <th style="width: auto; min-width: 150px">الاسم</th>
+                  <th style="width: auto; min-width: 70px">رخصة يوم</th>
+                  <th style="width: auto; min-width: 70px">استئذان قصير</th>
+                  <th style="width: auto; min-width: 80px">إستئذان طبي</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${reportData.map((item, index) => `
+                  <tr>
+                    <td class="number-cell">${index + 1}</td>
+                    <td class="rank-cell">${(item.employee.category === 'ضابط' || item.employee.category === 'ضابط صف') ? item.employee.rank : item.employee.category}</td>
+                    <td class="employee-name">${item.employee.full_name}</td>
+                    <td class="number-cell">${item.fullDays}</td>
+                    <td class="number-cell">${item.halfDays}</td>
+                    <td class="number-cell">${item.medicalLicenses}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
         </div>
       </body>
       </html>
@@ -494,8 +577,9 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
                     <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 border-b-2 border-gray-200">م</th>
                     <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 border-b-2 border-gray-200">الرتبة</th>
                     <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 border-b-2 border-gray-200">اسم الموظف</th>
-                    <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 border-b-2 border-gray-200">يوم كامل</th>
-                    <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 border-b-2 border-gray-200">نصف يوم</th>
+                    <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 border-b-2 border-gray-200">رخصة يوم كامل</th>
+                    <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 border-b-2 border-gray-200">استئذان قصير</th>
+                    <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 border-b-2 border-gray-200">إستئذان طبي</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -524,10 +608,15 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
                           {data.halfDays || '-'}
                         </span>
                       </td>
+                      <td className="px-6 py-4 text-center">
+                        <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-bold">
+                          {data.medicalLicenses || '-'}
+                        </span>
+                      </td>
                     </tr>
                   )) : (
                     <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                      <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                         <div className="flex flex-col items-center gap-3">
                           <FileText className="w-16 h-16 text-gray-300" />
                           <p className="text-lg font-medium">لا توجد بيانات</p>
@@ -546,54 +635,83 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-200 to-gray-100 rounded-2xl">
-      <div className="max-w-6xl mx-auto px-6 py-8">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm" dir="rtl">
+      {/* Modal Container */}
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col animate-fade-in">
         {/* Header */}
-        <div className="text-center mb-12">
-          <div className="flex justify-center items-center gap-4 mb-6">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl">
-              <FileText className="w-8 h-8 text-white" />
+        <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-8 py-6 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
+                <FileText className="w-7 h-7 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-white">
+                  إنشاء تقرير جديد
+                </h2>
+                <p className="text-blue-100 text-sm mt-1">
+                  {currentStep === 1
+                    ? 'حدد معايير التقرير'
+                    : 'عرض بيانات التقرير'}
+                </p>
+              </div>
             </div>
+            <button
+              onClick={handleCloseModal}
+              className="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-xl flex items-center justify-center transition-colors"
+            >
+              <X className="w-5 h-5 text-white" />
+            </button>
           </div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">إنشاء تقرير جديد</h1>
-          <p className="text-gray-600">اتبع الخطوات لإنشاء تقرير مخصص لمتابعة الموظفين</p>
         </div>
 
         {/* Progress Steps */}
-        <div className="flex items-center justify-center mb-12">
-          {steps.map((step, index) => (
-            <div key={step.id} className="flex items-center">
-              <div className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-300 ${
-                currentStep === step.id 
-                  ? 'bg-blue-600 text-white shadow-lg' 
-                  : step.completed 
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-gray-100 text-gray-500'
-              }`}>
-                {step.completed ? (
-                  <CheckCircle className="w-5 h-5" />
-                ) : (
-                  step.icon
+        <div className="px-8 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+          <div className="flex items-center justify-between">
+            {[
+              { id: 1, title: 'إعدادات التقرير' },
+              { id: 2, title: 'معاينة وطباعة' }
+            ].map((step, index) => (
+              <React.Fragment key={step.id}>
+                <div className="flex items-center flex-1">
+                  <div className={`flex items-center justify-center w-10 h-10 rounded-full transition-all duration-300 ${
+                    currentStep > step.id
+                      ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg'
+                      : currentStep === step.id
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md ring-4 ring-blue-200'
+                      : 'bg-gray-200 text-gray-500'
+                  }`}>
+                    {currentStep > step.id ? (
+                      <CheckCircle className="w-5 h-5" />
+                    ) : (
+                      <span className="text-sm font-bold">{step.id}</span>
+                    )}
+                  </div>
+                  <div className="flex-1 text-right mr-3">
+                    <h3 className={`font-semibold text-sm ${
+                      currentStep >= step.id ? 'text-blue-700' : 'text-gray-500'
+                    }`}>
+                      {step.title}
+                    </h3>
+                  </div>
+                </div>
+                {index < 1 && (
+                  <div className={`flex-1 h-1 mx-3 rounded-full transition-all duration-300 ${
+                    currentStep > step.id
+                      ? 'bg-gradient-to-r from-blue-600 to-blue-700'
+                      : 'bg-gray-200'
+                  }`} />
                 )}
-                <span className="font-medium">{step.title}</span>
-              </div>
-              {index < steps.length - 1 && (
-                <ChevronLeft className="w-5 h-5 text-gray-400 mx-2" />
-              )}
-            </div>
-          ))}
+              </React.Fragment>
+            ))}
+          </div>
         </div>
 
-        {/* Step Content */}
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
-          <div className="px-8 py-6 border-b border-gray-200">
-            <h2 className="text-xl font-bold text-gray-800 mb-2">{steps[currentStep - 1].title}</h2>
-            <p className="text-gray-600">{steps[currentStep - 1].description}</p>
-          </div>
-
-          <div className="px-8 py-8">
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="px-12 py-8 space-y-8">
             {currentStep === 1 && (
-              <div className="space-y-6">
+              <div className="space-y-8">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-3">عنوان التقرير</label>
                   <input
@@ -630,7 +748,7 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
                   />
                 </div>
 
-                <div>
+                <div className="relative z-50">
                   <label className="block text-sm font-semibold text-gray-700 mb-3">اختيار الفئات</label>
                   <Select
                     isMulti
@@ -638,10 +756,13 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
                     value={reportConfig.categories.map(cat => ({ value: cat, label: cat }))}
                     onChange={(newValue) => setReportConfig(prev => ({
                       ...prev,
-                      categories: newValue ? newValue.map(v => v.value) : []
+                      categories: newValue ? newValue.map((v: any) => v.value) : []
                     }))}
                     placeholder="اختر الفئات المراد تضمينها..."
-                    styles={customSelectStyles}
+                    styles={{
+                      ...customSelectStyles,
+                      menuPortal: (base: any) => ({ ...base, zIndex: 9999 })
+                    }}
                     className="react-select-container"
                     classNamePrefix="react-select"
                     menuPortalTarget={document.body}
@@ -653,7 +774,7 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
             )}
 
             {currentStep === 2 && (
-              <div className="space-y-6">
+              <div className="space-y-8">
                 {/* Report Preview Header */}
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-6 shadow-sm">
                   <div className="flex items-center gap-3 mb-4">
@@ -707,13 +828,13 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
 
                     {/* Statistics */}
                     {reportData.length > 0 && (
-                      <div className="grid grid-cols-4 gap-3">
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                         <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-4 border border-purple-200">
                           <div className="text-center">
                             <div className="text-xl font-bold text-purple-700">
                               {reportData.reduce((sum, emp) => sum + emp.fullDays, 0)}
                             </div>
-                            <div className="text-xs text-purple-600 font-medium">إستئذانات طويلة</div>
+                            <div className="text-xs text-purple-600 font-medium">رخص يوم كامل</div>
                           </div>
                         </div>
                         <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-4 border border-orange-200">
@@ -724,12 +845,20 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
                             <div className="text-xs text-orange-600 font-medium">إستئذانات قصيرة</div>
                           </div>
                         </div>
+                        <div className="bg-gradient-to-br from-pink-50 to-rose-50 rounded-xl p-4 border border-pink-200">
+                          <div className="text-center">
+                            <div className="text-xl font-bold text-pink-700">
+                              {reportData.reduce((sum, emp) => sum + emp.medicalLicenses, 0)}
+                            </div>
+                            <div className="text-xs text-pink-600 font-medium">إستئذان طبي</div>
+                          </div>
+                        </div>
                         <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
                           <div className="text-center">
                             <div className="text-xl font-bold text-green-700">
-                              {reportData.reduce((sum, emp) => sum + emp.fullDays + emp.halfDays, 0)}
+                              {reportData.reduce((sum, emp) => sum + emp.totalHours, 0).toFixed(2)}
                             </div>
-                            <div className="text-xs text-green-600 font-medium">إجمالي الإستئذانات</div>
+                            <div className="text-xs text-green-600 font-medium">ساعات الاستئذانات القصيرة</div>
                           </div>
                         </div>
                         <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 border border-blue-200">
@@ -775,55 +904,44 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
                     طباعة التقرير
                   </button>
                 </div>
-
-                {/* Back Button */}
-                <div className="text-center pt-4">
-                  <button
-                    onClick={handleBack}
-                    className="flex items-center gap-2 px-6 py-3 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-xl transition-colors mx-auto"
-                  >
-                    <ChevronLeft className="w-4 h-4 rotate-180" />
-                    العودة للخطوة السابقة
-                  </button>
-                </div>
               </div>
             )}
-
-
-
           </div>
+        </div>
 
-          {/* Navigation */}
-          {currentStep < 2 && (
-            <div className="px-8 py-6 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
-              <button
-                onClick={handleBack}
-                disabled={currentStep === 1}
-                className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-200 ${
-                  currentStep === 1
-                    ? 'text-gray-400 cursor-not-allowed'
-                    : 'text-gray-600 hover:text-gray-800 hover:bg-gray-200'
-                }`}
-              >
-                <ChevronLeft className="w-4 h-4 rotate-180" />
-                السابق
-              </button>
-
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleNext}
-                  disabled={!canProceedToNextStep()}
-                  className={`flex items-center gap-2 px-8 py-3 rounded-xl font-medium transition-all duration-200 ${
-                    canProceedToNextStep()
-                      ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl'
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  }`}
-                >
-                  التالي
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+        {/* Footer - Action Buttons */}
+        <div className="px-8 py-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-t border-blue-100 flex-shrink-0 flex items-center justify-between">
+          {currentStep === 2 && (
+            <button
+              onClick={handleBack}
+              className="flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-white bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 shadow-md transition-all duration-200"
+            >
+              <ChevronLeft className="w-4 h-4 rotate-180" />
+              السابق
+            </button>
+          )}
+          <div className="flex-1" />
+          {currentStep === 1 ? (
+            <button
+              onClick={handleNext}
+              disabled={!canProceedToNextStep()}
+              className={`flex items-center gap-2 px-8 py-3 rounded-xl font-medium transition-all duration-200 shadow-lg ${
+                canProceedToNextStep()
+                  ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              التالي
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+          ) : (
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-3 px-8 py-3 rounded-xl font-medium bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700 shadow-lg transition-all duration-200"
+            >
+              <Printer className="w-5 h-5" />
+              طباعة التقرير
+            </button>
           )}
         </div>
       </div>
@@ -871,8 +989,10 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
                       <th className="border border-gray-300 px-4 py-3 text-center font-bold">م</th>
                       <th className="border border-gray-300 px-4 py-3 text-center font-bold">الرتبة</th>
                       <th className="border border-gray-300 px-4 py-3 text-center font-bold">الاسم</th>
-                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">استئذان طويل</th>
+                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">رخصة يوم كامل</th>
                       <th className="border border-gray-300 px-4 py-3 text-center font-bold">استئذان قصير</th>
+                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">إستئذان طبي</th>
+                      <th className="border border-gray-300 px-4 py-3 text-center font-bold">ساعات الاستئذانات القصيرة</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -887,6 +1007,8 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
                         <td className="border border-gray-300 px-4 py-3 text-center font-semibold">{item.employee.full_name}</td>
                         <td className="border border-gray-300 px-4 py-3 text-center font-bold text-blue-600">{item.fullDays}</td>
                         <td className="border border-gray-300 px-4 py-3 text-center font-bold text-green-600">{item.halfDays}</td>
+                        <td className="border border-gray-300 px-4 py-3 text-center font-bold text-purple-600">{item.medicalLicenses}</td>
+                        <td className="border border-gray-300 px-4 py-3 text-center font-bold text-indigo-600">{item.totalHours.toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -895,22 +1017,26 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
 
               {/* Summary Footer */}
               <div className="no-print mt-6 bg-gray-50 rounded-xl p-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
                   <div>
                     <div className="text-2xl font-bold text-blue-600">{reportData.length}</div>
                     <div className="text-sm text-gray-600">إجمالي الموظفين</div>
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-green-600">{reportData.reduce((sum, emp) => sum + emp.fullDays + emp.halfDays, 0)}</div>
-                    <div className="text-sm text-gray-600">إجمالي الإستئذانات</div>
+                    <div className="text-2xl font-bold text-purple-600">{reportData.reduce((sum, emp) => sum + emp.fullDays, 0)}</div>
+                    <div className="text-sm text-gray-600">رخص اليوم الكامل</div>
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-orange-600">{reportData.reduce((sum, emp) => sum + emp.fullDays, 0)}</div>
-                    <div className="text-sm text-gray-600">إستئذانات طويلة</div>
+                    <div className="text-2xl font-bold text-orange-600">{reportData.reduce((sum, emp) => sum + emp.halfDays, 0)}</div>
+                    <div className="text-sm text-gray-600">الاستئذانات القصيرة</div>
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-purple-600">{reportData.reduce((sum, emp) => sum + emp.halfDays, 0)}</div>
-                    <div className="text-sm text-gray-600">إستئذانات قصيرة</div>
+                    <div className="text-2xl font-bold text-pink-600">{reportData.reduce((sum, emp) => sum + emp.medicalLicenses, 0)}</div>
+                    <div className="text-sm text-gray-600">الإستئذان الطبي</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-green-600">{reportData.reduce((sum, emp) => sum + emp.totalHours, 0).toFixed(2)}</div>
+                    <div className="text-sm text-gray-600">ساعات الاستئذانات القصيرة</div>
                   </div>
                 </div>
               </div>

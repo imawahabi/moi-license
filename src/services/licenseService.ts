@@ -36,7 +36,7 @@ let mockLicenses: any[] = [
   {
     id: 'test-1',
     employee_id: '12',
-    license_type: 'نصف يوم',
+    license_type: 'إستئذان قصير',
     license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-05`,
     hours: 4,
     month: currentMonth,
@@ -51,7 +51,7 @@ let mockLicenses: any[] = [
   {
     id: 'test-2',
     employee_id: '12',
-    license_type: 'نصف يوم',
+    license_type: 'إستئذان قصير',
     license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-08`,
     hours: 4,
     month: currentMonth,
@@ -66,7 +66,7 @@ let mockLicenses: any[] = [
   {
     id: 'test-3',
     employee_id: '12',
-    license_type: 'نصف يوم',
+    license_type: 'إستئذان قصير',
     license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-12`,
     hours: 4,
     month: currentMonth,
@@ -81,7 +81,7 @@ let mockLicenses: any[] = [
   {
     id: 'test-4',
     employee_id: '12',
-    license_type: 'نصف يوم',
+    license_type: 'إستئذان قصير',
     license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-15`,
     hours: 4,
     month: currentMonth,
@@ -96,7 +96,7 @@ let mockLicenses: any[] = [
   {
     id: 'test-5',
     employee_id: '12',
-    license_type: 'نصف يوم',
+    license_type: 'إستئذان قصير',
     license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-18`,
     hours: 4,
     month: currentMonth,
@@ -112,7 +112,7 @@ let mockLicenses: any[] = [
   {
     id: 'test-6',
     employee_id: '10',
-    license_type: 'نصف يوم',
+    license_type: 'إستئذان قصير',
     license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-10`,
     hours: 4,
     month: currentMonth,
@@ -127,7 +127,7 @@ let mockLicenses: any[] = [
   {
     id: 'test-7',
     employee_id: '10',
-    license_type: 'نصف يوم',
+    license_type: 'إستئذان قصير',
     license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-20`,
     hours: 4,
     month: currentMonth,
@@ -159,7 +159,7 @@ let mockLicenses: any[] = [
   {
     id: 'test-9',
     employee_id: '34',
-    license_type: 'نصف يوم',
+    license_type: 'إستئذان قصير',
     license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-07`,
     hours: 4,
     month: currentMonth,
@@ -189,7 +189,7 @@ let mockLicenses: any[] = [
   {
     id: 'test-11',
     employee_id: '14',
-    license_type: 'نصف يوم',
+    license_type: 'إستئذان قصير',
     license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-16`,
     hours: 4,
     month: currentMonth,
@@ -205,7 +205,7 @@ let mockLicenses: any[] = [
   {
     id: 'test-12',
     employee_id: '13',
-    license_type: 'نصف يوم',
+    license_type: 'إستئذان قصير',
     license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-03`,
     hours: 4,
     month: currentMonth,
@@ -220,7 +220,7 @@ let mockLicenses: any[] = [
   {
     id: 'test-13',
     employee_id: '13',
-    license_type: 'نصف يوم',
+    license_type: 'إستئذان قصير',
     license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-09`,
     hours: 4,
     month: currentMonth,
@@ -235,7 +235,7 @@ let mockLicenses: any[] = [
   {
     id: 'test-14',
     employee_id: '13',
-    license_type: 'نصف يوم',
+    license_type: 'إستئذان قصير',
     license_date: `${currentYear}-${String(currentMonth).padStart(2, '0')}-17`,
     hours: 4,
     month: currentMonth,

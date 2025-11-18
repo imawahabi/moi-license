@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Select from 'react-select';
-import { Packer, Document, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, WidthType, VerticalAlign } from 'docx';
+import { Packer, Document, Paragraph, Table, TableRow, TableCell, AlignmentType, WidthType } from 'docx';
 import { saveAs } from 'file-saver';
-import { Search, FileText, Printer, Calendar, Users, Eye, X, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { Search, FileText, Printer, Calendar, Users, X, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 
 import { LicenseService } from '../services/licenseService';
 import { Employee, License } from '../types';
@@ -10,10 +10,11 @@ import { CATEGORY_ORDER, OFFICER_RANK_ORDER, NCO_RANK_ORDER } from '../utils/sor
 
 // Constants for monthly limits
 const MONTHLY_LIMITS = {
-  FULL_DAY_LICENSES: 3, // حد الاستئذانات الطويلة: 3 مرات شهرياً (لا تُحتسب بالساعات)
+  FULL_DAY_LICENSES: 3, // حد رخص اليوم الكامل: 3 مرات شهرياً (لا تُحتسب بالساعات)
   SHORT_LICENSES: 4, // حد الاستئذانات القصيرة: 4 مرات شهرياً
   MAX_SHORT_HOURS_PER_MONTH: 12, // حد ساعات الاستئذانات القصيرة فقط: 12 ساعة شهرياً
-  HOURS_PER_SHORT_LICENSE: 3 // معدل 3 ساعات لكل استئذان قصير
+  HOURS_PER_SHORT_LICENSE: 3, // معدل 3 ساعات لكل استئذان قصير
+  MEDICAL_LICENSES: Infinity // الإستئذان الطبي: بدون حدود
 };
 
 // تاريخ بداية تطبيق الحدود الشهرية - أول يوم في الشهر الحالي
@@ -40,6 +41,7 @@ interface EmployeeReportData {
   employee: Employee;
   fullDays: number;
   halfDays: number;
+  medicalLicenses: number;
   totalHours: number;
 }
 
@@ -47,14 +49,25 @@ interface MonthlyEmployeeStats {
   employee: Employee;
   fullDayLicenses: number;
   shortLicenses: number;
+  medicalLicenses: number;
   totalHours: number; // ساعات الاستئذانات القصيرة فقط
   remainingFullDays: number;
   remainingShortLicenses: number;
+  remainingMedicalLicenses: number;
   remainingShortHours: number; // الساعات المتبقية للاستئذانات القصيرة
   fullDayStatus: 'safe' | 'warning' | 'danger'; // حالة الاستئذانات الطويلة
   shortLicensesStatus: 'safe' | 'warning' | 'danger'; // حالة الاستئذانات القصيرة (عدد + ساعات)
   overallStatus: 'safe' | 'warning' | 'danger'; // الحالة العامة
 }
+
+// Helper function to convert Arabic numbers to English numbers
+const convertArabicToEnglishNumber = (value: number): number => {
+  const str = value.toString();
+  if (/[٠-٩]/.test(str)) {
+    return parseFloat(str.replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
+  }
+  return value;
+};
 
 // مكون الدائرة التقدمية
 const ProgressCircle: React.FC<{
@@ -106,51 +119,11 @@ const ProgressCircle: React.FC<{
           status === 'warning' ? 'text-yellow-700' :
           'text-red-700'
         }`}>
-          {current}
+          {convertArabicToEnglishNumber(current).toFixed(2)}
         </span>
       </div>
     </div>
   );
-};
-
-const customSelectStyles = {
-  control: (provided: any) => ({
-    ...provided,
-    minHeight: '44px',
-    border: '2px solid #e5e7eb',
-    borderRadius: '12px',
-    '&:hover': {
-      borderColor: '#3b82f6',
-    },
-    '&:focus-within': {
-      borderColor: '#3b82f6',
-      boxShadow: '0 0 0 3px rgba(59, 130, 246, 0.1)',
-    },
-  }),
-  option: (provided: any, state: any) => ({
-    ...provided,
-    backgroundColor: state.isSelected ? '#3b82f6' : state.isFocused ? '#eff6ff' : 'white',
-    color: state.isSelected ? 'white' : '#374151',
-    padding: '12px 16px',
-  }),
-  multiValue: (provided: any) => ({
-    ...provided,
-    backgroundColor: '#eff6ff',
-    borderRadius: '6px',
-  }),
-  multiValueLabel: (provided: any) => ({
-    ...provided,
-    color: '#1e40af',
-    fontWeight: '500',
-  }),
-  multiValueRemove: (provided: any) => ({
-    ...provided,
-    color: '#1e40af',
-    '&:hover': {
-      backgroundColor: '#dbeafe',
-      color: '#1e40af',
-    },
-  }),
 };
 
 const Reports: React.FC = () => {
@@ -221,6 +194,7 @@ const Reports: React.FC = () => {
 
       let fullDayLicenses = 0;
       let shortLicenses = 0;
+      let medicalLicenses = 0;
       let totalHours = 0;
 
       employeeLicenses.forEach(license => {
@@ -229,7 +203,7 @@ const Reports: React.FC = () => {
 
         if (isAfterLimitsStart) {
           // الاستئذان القصير: يُحتسب بالعدد والساعات
-          if (license.license_type === 'نصف يوم') {
+          if (license.license_type === 'إستئذان قصير') {
             shortLicenses++;
             totalHours += MONTHLY_LIMITS.HOURS_PER_SHORT_LICENSE; // 3 ساعات لكل استئذان قصير
           }
@@ -238,12 +212,17 @@ const Reports: React.FC = () => {
             fullDayLicenses++;
             // لا نضيف ساعات للاستئذان الطويل - هذا هو التصحيح المطلوب
           }
+          // الرخصة الطبية: يُحتسب بالعدد فقط (لا حدود للساعات)
+          else if (license.license_type === 'إستئذان طبي') {
+            medicalLicenses++;
+          }
         }
       });
 
       const remainingFullDays = Math.max(0, MONTHLY_LIMITS.FULL_DAY_LICENSES - fullDayLicenses);
       const remainingShortLicenses = Math.max(0, MONTHLY_LIMITS.SHORT_LICENSES - shortLicenses);
       const remainingShortHours = Math.max(0, MONTHLY_LIMITS.MAX_SHORT_HOURS_PER_MONTH - totalHours);
+      const remainingMedicalLicenses = Math.max(0, MONTHLY_LIMITS.MEDICAL_LICENSES - medicalLicenses);
 
       // تحديث المنطق حسب المتطلبات الجديدة
       let fullDayStatus: 'safe' | 'warning' | 'danger' = 'safe';
@@ -286,9 +265,11 @@ const Reports: React.FC = () => {
           employee,
           fullDayLicenses,
           shortLicenses,
+          medicalLicenses,
           totalHours,
           remainingFullDays,
           remainingShortLicenses,
+          remainingMedicalLicenses,
           remainingShortHours,
           fullDayStatus,
           shortLicensesStatus,
@@ -403,6 +384,7 @@ const Reports: React.FC = () => {
           employee: license.employee,
           fullDays: 0,
           halfDays: 0,
+          medicalLicenses: 0,
           totalHours: 0
         });
       }
@@ -411,10 +393,11 @@ const Reports: React.FC = () => {
 
       if (license.license_type === 'يوم كامل') {
         data.fullDays += 1;
-        // الاستئذانات الطويلة لا تُحتسب بالساعات
-      } else if (license.license_type === 'نصف يوم') {
+      } else if (license.license_type === 'إستئذان قصير') {
         data.halfDays += 1;
-        data.totalHours += MONTHLY_LIMITS.HOURS_PER_SHORT_LICENSE; // 3 ساعات لكل استئذان قصير
+        data.totalHours += MONTHLY_LIMITS.HOURS_PER_SHORT_LICENSE; // الساعات تخص الاستئذانات القصيرة فقط
+      } else if (license.license_type === 'إستئذان طبي') {
+        data.medicalLicenses += 1;
       }
     });
 
@@ -559,6 +542,180 @@ const Reports: React.FC = () => {
     return { title, subtitle };
   };
 
+  // Handle CSV export for custom reports
+  const handleCSVExport = () => {
+    const { title: reportTitle } = generateReportInfo();
+
+    // CSV headers
+    const headers = [
+      'م',
+      'الرتبة',
+      'الاسم',
+      'رقم الملف',
+      'رخص يوم كامل',
+      'استئذان قصير',
+      'إستئذان طبي',
+    ];
+
+    // CSV data rows
+    const csvData = reportData.map((item, index) => [
+      index + 1,
+      (item.employee.category === 'ضابط' || item.employee.category === 'ضابط صف')
+        ? item.employee.rank
+        : item.employee.category,
+      item.employee.full_name,
+      item.employee.file_number,
+      item.fullDays,
+      item.halfDays,
+      item.medicalLicenses
+    ]);
+
+    // Combine headers and data
+    const allRows = [headers, ...csvData];
+
+    // Convert to CSV string
+    const csvContent = allRows.map(row =>
+      row.map(field => {
+        // Escape fields containing commas, quotes, or newlines
+        const stringField = String(field);
+        if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n')) {
+          return `"${stringField.replace(/"/g, '""')}"`;
+        }
+        return stringField;
+      }).join(',')
+    ).join('\n');
+
+    // Add BOM for proper UTF-8 encoding in Excel
+    const BOM = '\uFEFF';
+    const csvWithBOM = BOM + csvContent;
+
+    // Create blob and download
+    const blob = new Blob([csvWithBOM], { type: 'text/csv;charset=utf-8;' });
+    const fileName = `تقرير_${reportTitle.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+    saveAs(blob, fileName);
+  };
+
+  // Handle Word export for custom reports
+  const handleWordExport = async () => {
+    const { title: reportTitle, subtitle } = generateReportInfo();
+
+    const doc = new Document({
+      sections: [
+        {
+          properties: {
+            page: {
+              margin: {
+                top: 1440, // 1 inch
+                right: 1440,
+                bottom: 1440,
+                left: 1440,
+              },
+            },
+          },
+          children: [
+            // Title
+            new Paragraph({
+              text: reportTitle,
+              heading: 'Heading1',
+              alignment: AlignmentType.CENTER,
+            }),
+
+            // Subtitle
+            ...(subtitle ? [
+              new Paragraph({
+                text: subtitle,
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 400 },
+              })
+            ] : []),
+
+            // Table
+            new Table({
+              width: {
+                size: 100,
+                type: WidthType.PERCENTAGE,
+              },
+              rows: [
+                // Header row
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      children: [new Paragraph({ text: 'م', alignment: AlignmentType.CENTER })],
+                      width: { size: 5, type: WidthType.PERCENTAGE },
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({ text: 'الرتبة', alignment: AlignmentType.CENTER })],
+                      width: { size: 15, type: WidthType.PERCENTAGE },
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({ text: 'الاسم', alignment: AlignmentType.CENTER })],
+                      width: { size: 30, type: WidthType.PERCENTAGE },
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({ text: 'رخصة يوم كامل', alignment: AlignmentType.CENTER })],
+                      width: { size: 12, type: WidthType.PERCENTAGE },
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({ text: 'استئذان قصير', alignment: AlignmentType.CENTER })],
+                      width: { size: 13, type: WidthType.PERCENTAGE },
+                    }),
+                    new TableCell({
+                      children: [new Paragraph({ text: 'إستئذان طبي', alignment: AlignmentType.CENTER })],
+                      width: { size: 10, type: WidthType.PERCENTAGE },
+                    }),
+                  ],
+                }),
+
+                // Data rows
+                ...reportData.map((item, index) =>
+                  new TableRow({
+                    children: [
+                      new TableCell({
+                        children: [new Paragraph({ text: (index + 1).toString(), alignment: AlignmentType.CENTER })],
+                      }),
+                      new TableCell({
+                        children: [new Paragraph({
+                          text: (item.employee.category === 'ضابط' || item.employee.category === 'ضابط صف')
+                            ? item.employee.rank
+                            : item.employee.category,
+                          alignment: AlignmentType.CENTER
+                        })],
+                      }),
+                      new TableCell({
+                        children: [new Paragraph({ text: item.employee.full_name, alignment: AlignmentType.CENTER })],
+                      }),
+                      new TableCell({
+                        children: [new Paragraph({ text: item.fullDays.toString(), alignment: AlignmentType.CENTER })],
+                      }),
+                      new TableCell({
+                        children: [new Paragraph({ text: item.halfDays.toString(), alignment: AlignmentType.CENTER })],
+                      }),
+                      new TableCell({
+                        children: [new Paragraph({ text: item.medicalLicenses.toString(), alignment: AlignmentType.CENTER })],
+                      }),
+                    ],
+                  })
+                ),
+              ],
+            }),
+          ],
+        },
+      ],
+    });
+
+    try {
+      const buffer = await Packer.toBuffer(doc);
+      const blob = new Blob([new Uint8Array(buffer)], {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      });
+
+      const fileName = `تقرير_${reportTitle.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.docx`;
+      saveAs(blob, fileName);
+    } catch (error) {
+      console.error('Error exporting to Word:', error);
+    }
+  };
+
   // Handle print for custom reports
   const handlePrint = () => {
     const printWindow = window.open('', '_blank', 'width=800,height=600');
@@ -701,8 +858,9 @@ const Reports: React.FC = () => {
               <th>م</th>
               <th>الرتبة</th>
               <th>الاسم</th>
-              <th>رخصة ( يوم )</th>
+              <th>رخصة يوم كامل</th>
               <th>استئذان قصير</th>
+              <th>إستئذان طبي</th>
             </tr>
           </thead>
           <tbody>
@@ -713,6 +871,7 @@ const Reports: React.FC = () => {
                 <td class="employee-name">${item.employee.full_name}</td>
                 <td class="number-cell">${item.fullDays}</td>
                 <td class="number-cell">${item.halfDays}</td>
+                <td class="number-cell">${item.medicalLicenses}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -742,10 +901,11 @@ const Reports: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen p-6">
-      <div className="mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-6">
+      <div className="mx-auto max-w-full">
+
         {/* Header */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 mb-6 m-auto">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 mb-6 m-auto">
           {/* Tabs */}
           <div className="px-6 py-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -753,8 +913,8 @@ const Reports: React.FC = () => {
                 onClick={() => setActiveTab('monthly-limits')}
                 className={`cursor-pointer p-6 rounded-2xl border-2 transition-all duration-300 ${
                   activeTab === 'monthly-limits'
-                    ? 'border-blue-500 bg-blue-50 shadow-lg transform scale-105'
-                    : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50 hover:shadow-md'
+                    ? 'border-blue-500 bg-gradient-to-r from-blue-50 to-indigo-50 shadow-xl transform scale-105'
+                    : 'border-gray-200 hover:border-blue-300 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 hover:shadow-lg'
                 }`}
               >
                 <div className="flex items-center gap-4">
@@ -800,8 +960,8 @@ const Reports: React.FC = () => {
                 onClick={() => setActiveTab('custom-reports')}
                 className={`cursor-pointer p-6 rounded-2xl border-2 transition-all duration-300 ${
                   activeTab === 'custom-reports'
-                    ? 'border-purple-500 bg-purple-50 shadow-lg transform scale-105'
-                    : 'border-gray-200 hover:border-purple-300 hover:bg-purple-50 hover:shadow-md'
+                    ? 'border-purple-500 bg-gradient-to-r from-purple-50 to-indigo-50 shadow-xl transform scale-105'
+                    : 'border-gray-200 hover:border-purple-300 hover:bg-gradient-to-r hover:from-purple-50 hover:to-indigo-50 hover:shadow-lg'
                 }`}
               >
                 <div className="flex items-center gap-4">
@@ -840,7 +1000,7 @@ const Reports: React.FC = () => {
 
         {/* Monthly Limits Card */}
         {activeTab === 'monthly-limits' && (
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 mb-6">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 mb-6">
             <div className="px-8 py-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -848,19 +1008,22 @@ const Reports: React.FC = () => {
                     <Clock className="w-6 h-6 text-blue-600" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-gray-800">الحدود الشهرية للاستئذانات</h2>
+                    <h2 className="text-xl font-bold text-gray-800">الحدود الشهرية للرخص والإستئذانات</h2>
                     <p className="text-sm text-gray-600">
                       من بداية {MONTHLY_LIMITS_START_DATE.toLocaleDateString('ar-US')} - وما قبل ذلك لا يتبع الحدود الشهرية
                     </p>
-                    <div className="flex gap-4 mt-2 text-xs">
+                    <div className="flex gap-4 mt-2 text-xs flex-wrap">
                       <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                        حد الاستئذانات الطويلة: {MONTHLY_LIMITS.FULL_DAY_LICENSES}
+                        حد رخص اليوم الكامل: {MONTHLY_LIMITS.FULL_DAY_LICENSES}
                       </span>
                       <span className="bg-green-100 text-green-800 px-2 py-1 rounded">
                         حد الاستئذانات القصيرة: {MONTHLY_LIMITS.SHORT_LICENSES}
                       </span>
                       <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded">
                         حد ساعات الاستئذانات القصيرة: {MONTHLY_LIMITS.MAX_SHORT_HOURS_PER_MONTH}
+                      </span>
+                      <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                        الإستئذان الطبي: بدون حدود ∞
                       </span>
                     </div>
                   </div>
@@ -894,15 +1057,16 @@ const Reports: React.FC = () => {
 
 
                   <div className="overflow-x-auto">
-                    <table className="w-full border-collapse border-4 border-gray-100">
+                    <table className="w-full border-collapse border-4 border-gray-100 shadow-lg rounded-xl overflow-hidden">
                       <thead>
-                        <tr className="bg-gray-50 border-b border-gray-200">
+                        <tr className="bg-gradient-to-r from-gray-50 to-blue-50 border-b-2 border-gray-200">
                           <th className="text-center py-3 px-3 font-semibold text-gray-700 text-sm">م</th>
                           <th className="text-center py-3 px-3 font-semibold text-gray-700 text-sm">الرتبة</th>
                           <th className="text-right py-3 px-4 font-semibold text-gray-700 text-sm">الاسم</th>
-                          <th className="text-center py-3 px-3 font-semibold text-gray-700 text-sm">رخصة ( يوم )</th>
+                          <th className="text-center py-3 px-3 font-semibold text-gray-700 text-sm">رخصة يوم كامل</th>
                           <th className="text-center py-3 px-3 font-semibold text-gray-700 text-sm">استئذانات قصيرة</th>
-                          <th className="text-center py-3 px-3 font-semibold text-gray-700 text-sm">ساعات الاستئذانات القصيرة</th>
+                          <th className="text-center py-3 px-3 font-semibold text-gray-700 text-sm">ساعات الإستئذانات القصيرة</th>
+                          <th className="text-center py-3 px-3 font-semibold text-gray-700 text-sm">إستئذان طبي</th>
                           <th className="text-center py-3 px-4 font-semibold text-gray-700 text-sm">الحالة</th>
                         </tr>
                       </thead>
@@ -918,7 +1082,7 @@ const Reports: React.FC = () => {
                             );
                           })
                           .map((stat,index) => (
-                          <tr>
+                          <tr key={stat.employee.id}>
                            <td className="py-4 px-3 text-center">
                               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center font-bold text-blue-600 mx-auto">
                                {index + 1}
@@ -965,7 +1129,20 @@ const Reports: React.FC = () => {
                                   status={stat.shortLicensesStatus}
                                   size={52}
                                 />
-                                <span className="text-xs text-gray-500">من {MONTHLY_LIMITS.MAX_SHORT_HOURS_PER_MONTH} ساعة</span>
+                                <span className="text-xs text-gray-500">
+                                  من {MONTHLY_LIMITS.MAX_SHORT_HOURS_PER_MONTH} ساعة
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-3 text-center">
+                              <div className="flex flex-col items-center gap-1">
+                                <ProgressCircle
+                                  current={stat.medicalLicenses}
+                                  max={Infinity}
+                                  status="safe"
+                                  size={52}
+                                />
+                                <span className="text-xs text-purple-500">بدون حدود ∞</span>
                               </div>
                             </td>
                             <td className="py-4 px-4 text-center">
@@ -974,14 +1151,14 @@ const Reports: React.FC = () => {
                                   <div className="flex items-center gap-2 px-3 py-2 bg-red-100 border border-red-300 rounded-lg">
                                     <AlertTriangle className="w-4 h-4 text-red-600" />
                                     <span className="text-red-700 font-semibold text-sm">
-                                      {stat.fullDayStatus === 'danger' ? 'تحذير استئذانات طويلة' : 'تحذير استئذانات قصيرة'}
+                                      {stat.fullDayStatus === 'danger' ? 'تحذير رخصة يوم كامل' : 'تحذير استئذانات قصيرة'}
                                     </span>
                                   </div>
                                 ) : stat.overallStatus === 'warning' ? (
                                   <div className="flex items-center gap-2 px-3 py-2 bg-yellow-100 border border-yellow-300 rounded-lg">
                                     <Clock className="w-4 h-4 text-yellow-600" />
                                     <span className="text-yellow-700 font-semibold text-sm">
-                                      {stat.fullDayStatus === 'warning' ? 'تنبيه استئذانات طويلة' : 'تنبيه استئذانات قصيرة'}
+                                      {stat.fullDayStatus === 'warning' ? 'تنبيه رخصة يوم كامل' : 'تنبيه استئذانات قصيرة'}
                                     </span>
                                   </div>
                                 ) : (
@@ -1029,7 +1206,7 @@ const Reports: React.FC = () => {
 
         {/* Custom Reports Card */}
         {activeTab === 'custom-reports' && (
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 mb-6">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 mb-6">
             <div className="px-8 py-6 border-b border-gray-200">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
@@ -1118,7 +1295,7 @@ const Reports: React.FC = () => {
 
               {/* Yearly Report Filters */}
               {reportConfig.reportType === 'yearly' && (
-                <div className="bg-green-50 rounded-xl p-6">
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 border border-green-200 shadow-lg">
                   <h4 className="text-lg font-bold text-green-800 mb-4 flex items-center gap-2">
                     <Calendar className="w-5 h-5" />
                     تقرير سنوي
@@ -1247,7 +1424,7 @@ const Reports: React.FC = () => {
 
                         {/* Selected Employees */}
                         {reportConfig.selectedEmployees.length > 0 && (
-                          <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3 border border-blue-200 shadow-md">
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-sm font-semibold text-blue-800">
                                 الموظفين المحددين ({reportConfig.selectedEmployees.length})
@@ -1566,7 +1743,7 @@ const Reports: React.FC = () => {
                   <h3 className="text-lg font-bold text-gray-800">إجراءات التقرير</h3>
                   <p className="text-sm text-gray-600">طباعة وتصدير التقرير</p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-3 flex-wrap justify-end">
                   <button
                     onClick={handlePrint}
                     disabled={reportData.length === 0}
@@ -1576,11 +1753,20 @@ const Reports: React.FC = () => {
                     طباعة التقرير
                   </button>
                   <button
+                    onClick={handleWordExport}
+                    disabled={reportData.length === 0}
+                    className="flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors duration-200 shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    <FileText className="w-5 h-5" />
+                    تصدير Word
+                  </button>
+                  <button
+                    onClick={handleCSVExport}
                     disabled={reportData.length === 0}
                     className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors duration-200 shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     <FileText className="w-5 h-5" />
-                    تصدير Word
+                    تصدير CSV
                   </button>
                 </div>
               </div>
@@ -1593,32 +1779,37 @@ const Reports: React.FC = () => {
                   {/* Report Summary */}
                   <div className="mb-6">
                     <h3 className="text-lg font-bold text-gray-800 mb-4">ملخص التقرير</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 text-center shadow-md">
                         <div className="w-4 h-4 bg-blue-500 rounded mx-auto mb-2"></div>
                         <div className="text-2xl font-bold text-blue-700">{reportData.length}</div>
                         <div className="text-sm text-blue-600 font-medium">إجمالي الموظفين</div>
                       </div>
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4 text-center shadow-md">
                         <div className="w-4 h-4 bg-green-500 rounded mx-auto mb-2"></div>
                         <div className="text-2xl font-bold text-green-700">
-                          {reportData.reduce((sum, emp) => sum + emp.fullDays + emp.halfDays, 0)}
+                          {reportData.reduce((sum, emp) => sum + emp.fullDays + emp.halfDays + emp.medicalLicenses, 0)}
                         </div>
-                        <div className="text-sm text-green-600 font-medium">إجمالي الاستئذانات</div>
+                        <div className="text-sm text-green-600 font-medium">إجمالي الاستئذانات والإستئذان الطبي</div>
                       </div>
-                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 text-center">
+                      <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg p-4 text-center shadow-md">
                         <div className="w-4 h-4 bg-purple-500 rounded mx-auto mb-2"></div>
                         <div className="text-2xl font-bold text-purple-700">
                           {reportData.reduce((sum, emp) => sum + emp.fullDays, 0)}
                         </div>
-                        <div className="text-sm text-purple-600 font-medium">رخصة ( يوم )</div>
+                        <div className="text-sm text-purple-600 font-medium">رخصة يوم كامل</div>
                       </div>
-                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center">
+                      <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-lg p-4 text-center shadow-md">
                         <div className="w-4 h-4 bg-orange-500 rounded mx-auto mb-2"></div>
                         <div className="text-2xl font-bold text-orange-700">
                           {reportData.reduce((sum, emp) => sum + emp.halfDays, 0)}
                         </div>
                         <div className="text-sm text-orange-600 font-medium">استئذانات قصيرة</div>
+                      </div>
+                      <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-lg p-4 text-center shadow-md">
+                        <div className="w-4 h-4 bg-indigo-500 rounded mx-auto mb-2"></div>
+                        <div className="text-2xl font-bold text-indigo-700">{reportData.reduce((sum, emp) => sum + emp.medicalLicenses, 0)}</div>
+                        <div className="text-sm text-indigo-600 font-medium">إستئذان طبي</div>
                       </div>
                     </div>
                   </div>
@@ -1632,9 +1823,9 @@ const Reports: React.FC = () => {
                           <th className="text-right py-4 px-4 font-bold text-gray-700">الرتبة</th>
                           <th className="text-right py-4 px-4 font-bold text-gray-700">الاسم</th>
                           <th className="text-center py-4 px-4 font-bold text-gray-700">رقم الملف</th>
-                          <th className="text-center py-4 px-4 font-bold text-gray-700">رخصة ( يوم )</th>
+                          <th className="text-center py-4 px-4 font-bold text-gray-700">رخصة يوم كامل</th>
                           <th className="text-center py-4 px-4 font-bold text-gray-700">استئذانات قصيرة</th>
-                          <th className="text-center py-4 px-4 font-bold text-gray-700">ساعات الاستئذانات القصيرة</th>
+                          <th className="text-center py-4 px-4 font-bold text-gray-700">إستئذان طبي</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
@@ -1663,8 +1854,8 @@ const Reports: React.FC = () => {
                               </span>
                             </td>
                             <td className="py-4 px-4 text-center">
-                              <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-bold">
-                                {item.totalHours > 0 ? `${item.totalHours} ساعة` : '-'}
+                              <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-bold">
+                                {item.medicalLicenses}
                               </span>
                             </td>
                           </tr>

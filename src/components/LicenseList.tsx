@@ -69,7 +69,12 @@ const EditLicenseModal: React.FC<EditLicenseModalProps> = ({ license, employees,
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdate(formData);
+    const updatedData = {
+      ...formData,
+      hours: (formData.license_type === 'إستئذان قصير' || formData.license_type === 'إستئذان طبي') ? formData.hours : undefined,
+      notes: formData.notes || ''
+    };
+    onUpdate(updatedData);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -181,11 +186,12 @@ const EditLicenseModal: React.FC<EditLicenseModalProps> = ({ license, employees,
                 onChange={handleInputChange}
                 className="input-field"
               >
-                <option value="يوم كامل">إستئذان طويل</option>
-                <option value="نصف يوم">إستئذان قصير</option>
+                <option value="يوم كامل">رخصة يوم كامل</option>
+                <option value="إستئذان قصير">إستئذان قصير</option>
+                <option value="إستئذان طبي">إستئذان طبي</option>
               </select>
             </div>
-            {formData.license_type === 'نصف يوم' && (
+            {(formData.license_type === 'إستئذان قصير' || formData.license_type === 'إستئذان طبي') && (
               <div>
                 <label className="block text-sm font-medium text-secondary-700 mb-2">الساعات</label>
                 <input
@@ -206,6 +212,17 @@ const EditLicenseModal: React.FC<EditLicenseModalProps> = ({ license, employees,
                 onChange={handleInputChange}
                 required
                 className="input-field text-right"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-secondary-700 mb-2">ملاحظات (اختياري)</label>
+              <textarea
+                name="notes"
+                value={formData.notes || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="أضف أي ملاحظات إضافية..."
+                className="input-field resize-none"
+                rows={3}
               />
             </div>
             <div className="modal-footer">
@@ -770,6 +787,7 @@ const LicenseList: React.FC = () => {
                     <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">تاريخ الاستئذان</th>
                     <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">الساعات</th>
                     <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">سُجلت منذ</th>
+                    <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 border-b-2 border-gray-200">ملاحظات</th>
                     <th className="px-6 py-4 text-center text-sm font-bold text-gray-700 border-b-2 border-gray-200">الإجراءات</th>
                   </tr>
                 </thead>
@@ -793,9 +811,11 @@ const LicenseList: React.FC = () => {
                           <span className={`px-4 py-2 rounded-full text-xs font-bold shadow-sm ${
                             license.license_type === 'يوم كامل'
                               ? 'bg-green-100 text-green-800 border border-green-200'
+                              : license.license_type === 'إستئذان طبي'
+                              ? 'bg-purple-100 text-purple-800 border border-purple-200'
                               : 'bg-orange-100 text-orange-800 border border-orange-200'
                           }`}>
-                            {license.license_type === 'يوم كامل' ? 'إستئذان طويل' : 'إستئذان قصير'}
+                            {license.license_type === 'يوم كامل' ? 'رخصة يوم كامل' : license.license_type === 'إستئذان طبي' ? 'إستئذان طبي' : 'إستئذان قصير'}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-700 font-medium">{formatDate(license.license_date)}</td>
@@ -805,13 +825,22 @@ const LicenseList: React.FC = () => {
                               {license.hours} ساعات
                             </span>
                           ) : (
-                            <span className="text-gray-400 font-medium">إستئذان طويل</span>
+                            <span className="text-gray-400 font-medium">رخصة يوم كامل</span>
                           )}
                         </td>
                         <td className="px-6 py-4 text-sm">
                           <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-medium">
-                            {getTimeSince(license.license_date)}
+                            {license.created_at ? getTimeSince(license.created_at) : 'غير متوفر'}
                           </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-700">
+                          {license.notes ? (
+                            <div className="max-w-xs truncate" title={license.notes}>
+                              {license.notes}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 italic">لا توجد ملاحظات</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-center">
                           <div className="flex items-center justify-center gap-2">
