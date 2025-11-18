@@ -129,7 +129,7 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
         data.fullDays += 1;
       } else if (license.license_type === 'إستئذان قصير') {
         data.halfDays += 1;
-        data.totalHours += license.hours || 0;
+        data.totalHours += Number(license.hours) || 0;
       } else if (license.license_type === 'إستئذان طبي') {
         data.medicalLicenses += 1;
       }
@@ -537,7 +537,7 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
             <div className="flex items-center gap-3">
               <button
                 onClick={handlePrint}
-                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md"
+                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-lg"
               >
                 <Printer className="w-4 h-4" />
                 طباعة
@@ -666,45 +666,43 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
         </div>
 
         {/* Progress Steps */}
-        <div className="px-8 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
-          <div className="flex items-center justify-between">
-            {[
-              { id: 1, title: 'إعدادات التقرير' },
-              { id: 2, title: 'معاينة وطباعة' }
-            ].map((step, index) => (
-              <React.Fragment key={step.id}>
-                <div className="flex items-center flex-1">
-                  <div className={`flex items-center justify-center w-10 h-10 rounded-full transition-all duration-300 ${
-                    currentStep > step.id
-                      ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg'
-                      : currentStep === step.id
-                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md ring-4 ring-blue-200'
-                      : 'bg-gray-200 text-gray-500'
-                  }`}>
-                    {currentStep > step.id ? (
-                      <CheckCircle className="w-5 h-5" />
-                    ) : (
-                      <span className="text-sm font-bold">{step.id}</span>
-                    )}
-                  </div>
-                  <div className="flex-1 text-right mr-3">
-                    <h3 className={`font-semibold text-sm ${
-                      currentStep >= step.id ? 'text-blue-700' : 'text-gray-500'
-                    }`}>
-                      {step.title}
-                    </h3>
-                  </div>
+        <div className="px-8 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100 flex-shrink-0 flex items-center justify-between">
+          {[
+            { id: 1, title: 'إعدادات التقرير' },
+            { id: 2, title: 'معاينة وطباعة' }
+          ].map((step, index) => (
+            <React.Fragment key={step.id}>
+              <div className="flex items-center flex-1">
+                <div className={`flex items-center justify-center w-10 h-10 rounded-full transition-all duration-300 ${
+                  currentStep > step.id
+                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg'
+                    : currentStep === step.id
+                    ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md ring-4 ring-blue-200'
+                    : 'bg-gray-200 text-gray-500'
+                }`}>
+                  {currentStep > step.id ? (
+                    <CheckCircle className="w-5 h-5" />
+                  ) : (
+                    <span className="text-sm font-bold">{step.id}</span>
+                  )}
                 </div>
-                {index < 1 && (
-                  <div className={`flex-1 h-1 mx-3 rounded-full transition-all duration-300 ${
-                    currentStep > step.id
-                      ? 'bg-gradient-to-r from-blue-600 to-blue-700'
-                      : 'bg-gray-200'
-                  }`} />
-                )}
-              </React.Fragment>
-            ))}
-          </div>
+                <div className="flex-1 text-right mr-3">
+                  <h3 className={`font-semibold text-sm ${
+                    currentStep >= step.id ? 'text-blue-700' : 'text-gray-500'
+                  }`}>
+                    {step.title}
+                  </h3>
+                </div>
+              </div>
+              {index < 1 && (
+                <div className={`flex-1 h-1 mx-3 rounded-full transition-all duration-300 ${
+                  currentStep > step.id
+                    ? 'bg-gradient-to-r from-blue-600 to-blue-700'
+                    : 'bg-gray-200'
+                }`} />
+              )}
+            </React.Fragment>
+          ))}
         </div>
 
         {/* Content */}
@@ -834,7 +832,7 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
                             <div className="text-xl font-bold text-purple-700">
                               {reportData.reduce((sum, emp) => sum + emp.fullDays, 0)}
                             </div>
-                            <div className="text-xs text-purple-600 font-medium">رخص يوم كامل</div>
+                            <div className="text-xs text-purple-600 font-medium">رخصة يوم كامل</div>
                           </div>
                         </div>
                         <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-4 border border-orange-200">
@@ -856,7 +854,7 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
                         <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
                           <div className="text-center">
                             <div className="text-xl font-bold text-green-700">
-                              {reportData.reduce((sum, emp) => sum + emp.totalHours, 0).toFixed(2)}
+                              {reportData.reduce((sum, emp) => sum + (Number(emp.totalHours) || 0), 0).toFixed(2)}
                             </div>
                             <div className="text-xs text-green-600 font-medium">ساعات الاستئذانات القصيرة</div>
                           </div>
@@ -873,7 +871,6 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
                     )}
                   </div>
                 </div>
-
 
                 {reportData.length === 0 && reportConfig.dateRange.startDate && reportConfig.dateRange.endDate && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
@@ -1008,7 +1005,7 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
                         <td className="border border-gray-300 px-4 py-3 text-center font-bold text-blue-600">{item.fullDays}</td>
                         <td className="border border-gray-300 px-4 py-3 text-center font-bold text-green-600">{item.halfDays}</td>
                         <td className="border border-gray-300 px-4 py-3 text-center font-bold text-purple-600">{item.medicalLicenses}</td>
-                        <td className="border border-gray-300 px-4 py-3 text-center font-bold text-indigo-600">{item.totalHours.toFixed(2)}</td>
+                        <td className="border border-gray-300 px-4 py-3 text-center font-bold text-indigo-600">{Number(item.totalHours || 0).toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1024,7 +1021,7 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
                   </div>
                   <div>
                     <div className="text-2xl font-bold text-purple-600">{reportData.reduce((sum, emp) => sum + emp.fullDays, 0)}</div>
-                    <div className="text-sm text-gray-600">رخص اليوم الكامل</div>
+                    <div className="text-sm text-gray-600">رخصة يوم كامل</div>
                   </div>
                   <div>
                     <div className="text-2xl font-bold text-orange-600">{reportData.reduce((sum, emp) => sum + emp.halfDays, 0)}</div>
@@ -1035,7 +1032,7 @@ const ModernReports: React.FC<ModernReportsProps> = () => {
                     <div className="text-sm text-gray-600">الإستئذان الطبي</div>
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-green-600">{reportData.reduce((sum, emp) => sum + emp.totalHours, 0).toFixed(2)}</div>
+                    <div className="text-2xl font-bold text-green-600">{reportData.reduce((sum, emp) => sum + (Number(emp.totalHours) || 0), 0).toFixed(2)}</div>
                     <div className="text-sm text-gray-600">ساعات الاستئذانات القصيرة</div>
                   </div>
                 </div>

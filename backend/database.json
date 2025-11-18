@@ -755,6 +755,15 @@
       "category": "ضابط صف",
       "created_at": "2025-11-11T09:00:10.860Z",
       "updated_at": "2025-11-11T09:00:10.860Z"
+    },
+    {
+      "id": "333527cd-09ee-4909-9a50-bb7a3ac6f4fe",
+      "full_name": "عبدالرحمن طارق محمد",
+      "rank": "وكيل ضابط",
+      "file_number": "298101001437",
+      "category": "ضابط صف",
+      "created_at": "2025-11-17T09:06:13.675Z",
+      "updated_at": "2025-11-17T09:06:13.675Z"
     }
   ],
   "licenses": [
@@ -3874,13 +3883,14 @@
     {
       "id": "94f86e81-3832-4ded-92c5-52d1af9e536d",
       "employee_id": "3127eacd-224e-418a-b593-80bfdbd05451",
-      "license_type": "إستئذان قصير",
+      "license_type": "إستئذان طبي",
       "license_date": "2025-11-04",
       "hours": 3,
       "month": 11,
       "year": 2025,
       "created_at": "2025-11-04T06:49:51.853Z",
-      "updated_at": "2025-11-04T06:49:51.853Z"
+      "updated_at": "2025-11-16T11:30:24.976Z",
+      "notes": ""
     },
     {
       "id": "146bd7c2-3027-468a-885b-7d23cdfe7ab3",
@@ -4140,33 +4150,36 @@
       "employee_id": "7f26d9ee-2801-4e23-a821-c0326af0250c",
       "license_type": "إستئذان قصير",
       "license_date": "2025-11-11",
-      "hours": 1.3,
+      "hours": "1.3",
       "month": 11,
       "year": 2025,
       "created_at": "2025-11-11T09:00:35.022Z",
-      "updated_at": "2025-11-11T09:00:35.022Z"
+      "updated_at": "2025-11-18T08:33:33.881Z",
+      "notes": ""
     },
     {
       "id": "d87d0d9e-9a0d-412f-aadf-2a6191ed9e64",
       "employee_id": "86fb556a-7052-4b6e-849a-17541190a4d7",
       "license_type": "إستئذان قصير",
       "license_date": "2025-11-11",
-      "hours": 1.3,
+      "hours": "1.3",
       "month": 11,
       "year": 2025,
       "created_at": "2025-11-11T09:00:53.143Z",
-      "updated_at": "2025-11-11T09:00:53.143Z"
+      "updated_at": "2025-11-18T08:33:38.490Z",
+      "notes": ""
     },
     {
       "id": "a9d4267e-2362-40b8-9e90-82eef31d80a6",
       "employee_id": "8c94911c-897f-4c5d-ab7c-5fb52f1815f9",
       "license_type": "إستئذان قصير",
       "license_date": "2025-11-11",
-      "hours": 1.3,
+      "hours": "1.3",
       "month": 11,
       "year": 2025,
       "created_at": "2025-11-11T12:38:53.399Z",
-      "updated_at": "2025-11-11T12:38:53.399Z"
+      "updated_at": "2025-11-18T08:33:29.040Z",
+      "notes": ""
     },
     {
       "id": "39807eb1-45dd-4dd6-9272-ad96dd5732c6",
@@ -4195,11 +4208,12 @@
       "employee_id": "972e58d2-93f3-48f9-b9d2-892b0b2d04e1",
       "license_type": "إستئذان قصير",
       "license_date": "2025-11-13",
-      "hours": 1.3,
+      "hours": "1.3",
       "month": 11,
       "year": 2025,
       "created_at": "2025-11-13T07:43:41.244Z",
-      "updated_at": "2025-11-13T07:43:41.244Z"
+      "updated_at": "2025-11-18T08:33:24.349Z",
+      "notes": ""
     },
     {
       "id": "4ebc152b-f6db-4f85-9eb6-54a48b89bd4e",
@@ -4257,17 +4271,6 @@
       "updated_at": "2025-11-13T09:33:11.036Z"
     },
     {
-      "id": "6200a5cc-9a95-41c8-b2bf-99436e62a199",
-      "employee_id": "65a68fcf-081e-4037-b2d0-3547c9246819",
-      "license_type": "إستئذان قصير",
-      "license_date": "2025-11-16",
-      "hours": 3,
-      "month": 11,
-      "year": 2025,
-      "created_at": "2025-11-16T08:12:42.814Z",
-      "updated_at": "2025-11-16T08:12:42.814Z"
-    },
-    {
       "id": "eee02071-0056-434a-8aea-35ba4767bc94",
       "employee_id": "fb2996f3-6d06-4db1-8aa2-75c09a2fe2dc",
       "license_type": "إستئذان قصير",
@@ -4279,16 +4282,124 @@
       "updated_at": "2025-11-16T08:33:01.738Z"
     },
     {
-      "id": "a8cfc319-411d-4cc7-8922-b8fbf1d9302f",
-      "employee_id": "24b7db04-1b0e-4aa6-86c1-80b4f88e6745",
+      "id": "457edead-3f0b-43f5-9da0-0de214d3aa9a",
+      "employee_id": "1efb56ec-6f82-434e-b7b8-44b23cb3a137",
       "license_type": "إستئذان طبي",
-      "license_date": "2025-11-16",
-      "hours": 2,
+      "license_date": "2025-11-03",
+      "hours": 3,
       "notes": "",
       "month": 11,
       "year": 2025,
-      "created_at": "2025-11-16T10:54:48.908Z",
-      "updated_at": "2025-11-16T11:21:52.578Z"
+      "created_at": "2025-11-16T11:00:33.527Z",
+      "updated_at": "2025-11-16T11:00:33.527Z"
+    },
+    {
+      "id": "77699995-63b8-4580-8944-1b57246ca718",
+      "employee_id": "1efb56ec-6f82-434e-b7b8-44b23cb3a137",
+      "license_type": "إستئذان طبي",
+      "license_date": "2025-11-12",
+      "hours": 3,
+      "notes": "",
+      "month": 11,
+      "year": 2025,
+      "created_at": "2025-11-16T11:00:49.421Z",
+      "updated_at": "2025-11-16T11:00:49.421Z"
+    },
+    {
+      "id": "6609646a-7e2a-4b23-9a5d-6c20b8fd0809",
+      "employee_id": "65a68fcf-081e-4037-b2d0-3547c9246819",
+      "license_type": "يوم كامل",
+      "license_date": "2025-11-16",
+      "hours": null,
+      "notes": "",
+      "month": 11,
+      "year": 2025,
+      "created_at": "2025-11-16T11:29:38.008Z",
+      "updated_at": "2025-11-16T11:29:38.008Z"
+    },
+    {
+      "id": "28676ba0-6f68-42dd-a4eb-43612c2ee728",
+      "employee_id": "a853898e-fdc0-4210-8880-ecc3cdf6aef1",
+      "license_type": "إستئذان قصير",
+      "license_date": "2025-11-17",
+      "hours": 3,
+      "notes": "",
+      "month": 11,
+      "year": 2025,
+      "created_at": "2025-11-17T09:04:26.542Z",
+      "updated_at": "2025-11-17T09:04:26.542Z"
+    },
+    {
+      "id": "42e78ce0-e02e-4bd4-8bd5-fa4d51edc6ac",
+      "employee_id": "4edcd2af-3f82-4f67-8f51-0a576605d11f",
+      "license_type": "إستئذان قصير",
+      "license_date": "2025-11-17",
+      "hours": 3,
+      "notes": "",
+      "month": 11,
+      "year": 2025,
+      "created_at": "2025-11-17T09:04:46.685Z",
+      "updated_at": "2025-11-17T09:04:46.685Z"
+    },
+    {
+      "id": "ea1e4db3-5aee-4958-b100-1b751fb05913",
+      "employee_id": "3127eacd-224e-418a-b593-80bfdbd05451",
+      "license_type": "إستئذان قصير",
+      "license_date": "2025-11-17",
+      "hours": 3,
+      "notes": "",
+      "month": 11,
+      "year": 2025,
+      "created_at": "2025-11-17T09:05:00.936Z",
+      "updated_at": "2025-11-17T09:05:00.936Z"
+    },
+    {
+      "id": "e3f4eda4-19c3-4c97-8954-e381f7ec9edd",
+      "employee_id": "333527cd-09ee-4909-9a50-bb7a3ac6f4fe",
+      "license_type": "إستئذان قصير",
+      "license_date": "2025-11-17",
+      "hours": 3,
+      "notes": "",
+      "month": 11,
+      "year": 2025,
+      "created_at": "2025-11-17T09:06:30.933Z",
+      "updated_at": "2025-11-17T09:06:30.933Z"
+    },
+    {
+      "id": "7b7c35fd-1a32-4487-bcd3-1fd68b0c7615",
+      "employee_id": "4edcd2af-3f82-4f67-8f51-0a576605d11f",
+      "license_type": "إستئذان قصير",
+      "license_date": "2025-11-09",
+      "hours": 3,
+      "notes": "",
+      "month": 11,
+      "year": 2025,
+      "created_at": "2025-11-17T09:09:08.159Z",
+      "updated_at": "2025-11-17T09:09:08.159Z"
+    },
+    {
+      "id": "1afdcbea-da65-4218-b82c-aab3c62300c6",
+      "employee_id": "ac183455-a063-4d1a-bfbd-f428362ccc69",
+      "license_type": "إستئذان قصير",
+      "license_date": "2025-11-18",
+      "hours": 3,
+      "notes": "",
+      "month": 11,
+      "year": 2025,
+      "created_at": "2025-11-18T08:08:35.506Z",
+      "updated_at": "2025-11-18T08:08:35.506Z"
+    },
+    {
+      "id": "94327ea2-fb51-4214-92af-0b8c8ce7f6c7",
+      "employee_id": "5fce4ec3-ecdf-4bf6-a237-a7e2506de60c",
+      "license_type": "إستئذان قصير",
+      "license_date": "2025-11-18",
+      "hours": 3,
+      "notes": "",
+      "month": 11,
+      "year": 2025,
+      "created_at": "2025-11-18T08:26:09.985Z",
+      "updated_at": "2025-11-18T08:26:09.985Z"
     }
   ]
 }
